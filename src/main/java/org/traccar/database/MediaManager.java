@@ -68,6 +68,17 @@ public class MediaManager {
         return new FileOutputStream(createFile(uniqueId, name + "." + extension));
     }
 
+    public boolean deleteFile(String uniqueId, String name) throws IOException {
+        if (path == null) {
+            return false;
+        }
+        Path filePath = path.resolve(uniqueId).resolve(name).normalize();
+        if (!filePath.startsWith(path)) {
+            throw new IOException("Invalid media path");
+        }
+        return Files.deleteIfExists(filePath);
+    }
+
     public String writeFile(String uniqueId, ByteBuf buf, String extension) {
         if (path != null) {
             int size = buf.readableBytes();

@@ -35,6 +35,7 @@ import org.traccar.storage.query.Request;
 
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
+import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.HeaderParam;
 import jakarta.ws.rs.POST;
@@ -61,6 +62,7 @@ public class DeviceResource extends BaseObjectResource<Device> {
 
     private static final int DEFAULT_BUFFER_SIZE = 8192;
     private static final int IMAGE_SIZE_LIMIT = 500000;
+    private static final List<String> IMAGE_EXTENSIONS = List.of("jpg", "png", "gif", "webp");
 
     @Inject
     private CacheManager cacheManager;
@@ -187,23 +189,24 @@ public class DeviceResource extends BaseObjectResource<Device> {
         return Response.noContent().build();
     }
 
-    private String imageExtension(String type) {
+    private String imageExtension(String type, boolean allowGif) {
         return switch (type) {
             case "image/jpeg" -> "jpg";
             case "image/png" -> "png";
-            case "image/gif" -> "gif";
+            case "image/gif" -> {
+                if (allowGif) {
+                    yield "gif";
+                }
+                throw new IllegalArgumentException("Unsupported image type");
+            }
             case "image/webp" -> "webp";
             default -> throw new IllegalArgumentException("Unsupported image type");
         };
     }
 
-    @Path("{id}/image")
-    @POST
-    @Consumes("image/*")
-    public Response uploadImage(
-            @PathParam("id") long deviceId, File file,
-            @HeaderParam(HttpHeaders.CONTENT_TYPE) String type) throws StorageException, IOException {
-
+    private Response uploadImageFile(
+            long deviceId, File file, String type, String name, boolean allowGif)
+            throws StorageException, IOException {
         permissionsService.checkEdit(getUserId(), Device.class, false, false);
 
         Device device = storage.getObject(Device.class, new Request(
@@ -212,8 +215,7 @@ public class DeviceResource extends BaseObjectResource<Device> {
                         new Condition.Equals("id", deviceId),
                         new Condition.Permission(User.class, getUserId(), Device.class))));
         if (device != null) {
-            String name = "device";
-            String extension = imageExtension(type);
+            String extension = imageExtension(type, allowGif);
             try (var input = new FileInputStream(file);
                     var output = mediaManager.createFileStream(device.getUniqueId(), name, extension)) {
 
@@ -228,9 +230,64 @@ public class DeviceResource extends BaseObjectResource<Device> {
                     }
                 }
             }
+            for (String existingExtension : IMAGE_EXTENSIONS) {
+                if (!existingExtension.equals(extension) && (allowGif || !existingExtension.equals("gif"))) {
+                    mediaManager.deleteFile(device.getUniqueId(), name + "." + existingExtension);
+                }
+            }
             return Response.ok(name + "." + extension).build();
         }
         return Response.status(Response.Status.NOT_FOUND).build();
+    }
+
+    private Response deleteImageFiles(long deviceId, String name, boolean allowGif)
+            throws StorageException, IOException {
+        permissionsService.checkEdit(getUserId(), Device.class, false, false);
+
+        Device device = storage.getObject(Device.class, new Request(
+                new Columns.All(),
+                new Condition.And(
+                        new Condition.Equals("id", deviceId),
+                        new Condition.Permission(User.class, getUserId(), Device.class))));
+        if (device != null) {
+            for (String extension : IMAGE_EXTENSIONS) {
+                if (allowGif || !extension.equals("gif")) {
+                    mediaManager.deleteFile(device.getUniqueId(), name + "." + extension);
+                }
+            }
+            return Response.noContent().build();
+        }
+        return Response.status(Response.Status.NOT_FOUND).build();
+    }
+
+    @Path("{id}/image")
+    @POST
+    @Consumes("image/*")
+    public Response uploadImage(
+            @PathParam("id") long deviceId, File file,
+            @HeaderParam(HttpHeaders.CONTENT_TYPE) String type) throws StorageException, IOException {
+        return uploadImageFile(deviceId, file, type, "device", true);
+    }
+
+    @Path("{id}/image")
+    @DELETE
+    public Response deleteImage(@PathParam("id") long deviceId) throws StorageException, IOException {
+        return deleteImageFiles(deviceId, "device", true);
+    }
+
+    @Path("{id}/marker")
+    @POST
+    @Consumes({"image/jpeg", "image/png", "image/webp"})
+    public Response uploadMarker(
+            @PathParam("id") long deviceId, File file,
+            @HeaderParam(HttpHeaders.CONTENT_TYPE) String type) throws StorageException, IOException {
+        return uploadImageFile(deviceId, file, type, "marker", false);
+    }
+
+    @Path("{id}/marker")
+    @DELETE
+    public Response deleteMarker(@PathParam("id") long deviceId) throws StorageException, IOException {
+        return deleteImageFiles(deviceId, "marker", false);
     }
 
 }
