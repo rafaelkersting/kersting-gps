@@ -20,12 +20,20 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.UriInfo;
 import org.traccar.api.BaseResource;
+import org.traccar.command.SystemCommandService;
 import org.traccar.helper.LogAction;
 import org.traccar.model.BaseModel;
+import org.traccar.model.Command;
+import org.traccar.model.Device;
+import org.traccar.model.Group;
 import org.traccar.model.Permission;
+import org.traccar.model.User;
 import org.traccar.model.UserRestrictions;
 import org.traccar.session.cache.CacheManager;
 import org.traccar.storage.StorageException;
+import org.traccar.storage.query.Columns;
+import org.traccar.storage.query.Condition;
+import org.traccar.storage.query.Request;
 
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
@@ -53,11 +61,19 @@ public class PermissionsResource  extends BaseResource {
     @Inject
     private LogAction actionLogger;
 
+    @Inject
+    private SystemCommandService systemCommandService;
+
     @Context
     private HttpServletRequest request;
 
     private void checkPermission(Permission permission) throws StorageException {
         if (permissionsService.notAdmin(getUserId())) {
+            long commandId = permission.getOwnerClass().equals(Command.class) ? permission.getOwnerId()
+                    : permission.getPropertyClass().equals(Command.class) ? permission.getPropertyId() : 0;
+            if (commandId > 0 && systemCommandService.isSystemCommand(commandId)) {
+                throw new SecurityException("System command permissions require an administrator");
+            }
             permissionsService.checkPermission(permission.getOwnerClass(), getUserId(), permission.getOwnerId());
             permissionsService.checkPermission(permission.getPropertyClass(), getUserId(), permission.getPropertyId());
         }
@@ -103,6 +119,16 @@ public class PermissionsResource  extends BaseResource {
             actionLogger.link(request, getUserId(),
                     permission.getOwnerClass(), permission.getOwnerId(),
                     permission.getPropertyClass(), permission.getPropertyId());
+            if (permission.getOwnerClass().equals(User.class)
+                    && (permission.getPropertyClass().equals(Device.class)
+                    || permission.getPropertyClass().equals(Group.class))) {
+                User user = storage.getObject(User.class, new Request(
+                        new Columns.All(), new Condition.Equals("id", permission.getOwnerId())));
+                SystemCommandService.AssignmentResult result = systemCommandService.assignToUser(user, false, true);
+                for (long commandId : result.createdCommandIds()) {
+                    actionLogger.link(request, getUserId(), User.class, user.getId(), Command.class, commandId);
+                }
+            }
         }
         return Response.noContent().build();
     }

@@ -338,6 +338,11 @@ paths:
           description: Send the command to all devices in the group
           schema:
             type: integer
+        - name: confirmed
+          in: query
+          description: Required for system commands marked as critical
+          schema:
+            type: boolean
       requestBody:
         content:
           application/json:
@@ -365,6 +370,116 @@ paths:
           description: >-
             Could happen when the user doesn't have permission or an incorrect
             command _type_ for the device
+          content: {}
+        '409':
+          description: Critical confirmation missing or vehicle reported as moving
+          content: {}
+  /commands/defaults/bootstrap:
+    post:
+      operationId: postCommandsDefaultsBootstrap
+      summary: Create the initial system command catalog if it does not exist
+      description: Administrator only. This operation never sends a command to a device.
+      tags:
+        - Commands
+      responses:
+        '200':
+          description: Current default command definitions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Command'
+        '401':
+          description: Unauthorized
+          content: {}
+  /commands/defaults/preview:
+    get:
+      operationId: getCommandsDefaultsPreview
+      summary: Preview idempotent assignment of default commands to existing users
+      tags:
+        - Commands
+      responses:
+        '200':
+          description: Assignment summary without modifying permissions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: integer
+                  created:
+                    type: integer
+                  existing:
+                    type: integer
+                  ignoredUsers:
+                    type: integer
+                  commands:
+                    type: array
+                    items:
+                      type: object
+                  failures:
+                    type: array
+                    items:
+                      type: string
+    post:
+      operationId: postCommandsDefaultsPreview
+      summary: Preview assignment for selected users or users linked to selected groups
+      tags:
+        - Commands
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userIds:
+                  type: array
+                  items:
+                    type: integer
+                groupIds:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        '200':
+          description: Filtered assignment preview
+          content:
+            application/json:
+              schema:
+                type: object
+  /commands/defaults/apply:
+    post:
+      operationId: postCommandsDefaultsApply
+      summary: Assign missing default command permissions to eligible existing users
+      description: Administrator only. Repeated calls are idempotent and never send commands.
+      tags:
+        - Commands
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userIds:
+                  type: array
+                  items:
+                    type: integer
+                groupIds:
+                  type: array
+                  items:
+                    type: integer
+        required: true
+      responses:
+        '200':
+          description: Assignment result
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          description: Unauthorized
           content: {}
   /commands/types:
     get:

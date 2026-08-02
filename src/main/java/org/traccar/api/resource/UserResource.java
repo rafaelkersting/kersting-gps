@@ -21,11 +21,13 @@ import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.core.Context;
 import org.traccar.api.BaseObjectResource;
+import org.traccar.command.SystemCommandService;
 import org.traccar.config.Config;
 import org.traccar.config.Keys;
 import org.traccar.helper.LogAction;
 import org.traccar.helper.SessionHelper;
 import org.traccar.helper.model.UserUtil;
+import org.traccar.model.Command;
 import org.traccar.model.Device;
 import org.traccar.model.ManagedUser;
 import org.traccar.model.Permission;
@@ -61,6 +63,9 @@ public class UserResource extends BaseObjectResource<User> {
 
     @Inject
     private LogAction actionLogger;
+
+    @Inject
+    private SystemCommandService systemCommandService;
 
     @Context
     private HttpServletRequest request;
@@ -137,6 +142,10 @@ public class UserResource extends BaseObjectResource<User> {
         if (currentUser != null && currentUser.getUserLimit() != 0) {
             storage.addPermission(new Permission(User.class, getUserId(), ManagedUser.class, entity.getId()));
             actionLogger.link(request, getUserId(), User.class, getUserId(), ManagedUser.class, entity.getId());
+        }
+        SystemCommandService.AssignmentResult assignment = systemCommandService.assignToUser(entity, true, true);
+        for (long commandId : assignment.createdCommandIds()) {
+            actionLogger.link(request, getUserId(), User.class, entity.getId(), Command.class, commandId);
         }
         return Response.ok(entity).build();
     }

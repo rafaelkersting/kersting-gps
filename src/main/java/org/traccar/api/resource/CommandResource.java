@@ -26,6 +26,7 @@ import org.traccar.ServerManager;
 import org.traccar.api.ExtendedObjectResource;
 import org.traccar.command.CommandSender;
 import org.traccar.command.CommandSenderManager;
+import org.traccar.command.SystemCommandService;
 import org.traccar.database.CommandsManager;
 import org.traccar.helper.LogAction;
 import org.traccar.helper.model.DeviceUtil;
@@ -47,15 +48,21 @@ import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 
 @Path("commands")
 @Produces(MediaType.APPLICATION_JSON)
@@ -76,6 +83,9 @@ public class CommandResource extends ExtendedObjectResource<Command> {
     @Inject
     private CommandSenderManager commandSenderManager;
 
+    @Inject
+    private SystemCommandService systemCommandService;
+
     @Context
     private HttpServletRequest request;
 
@@ -93,6 +103,14 @@ public class CommandResource extends ExtendedObjectResource<Command> {
         }
     }
 
+    private void ensureVehicleStopped(long deviceId) throws StorageException {
+        Position position = storage.getObject(Position.class, new Request(
+                new Columns.All(), new Condition.LatestPositions(deviceId)));
+        if (position != null && position.getSpeed() > 0.5) {
+            throw new WebApplicationException("Vehicle is moving", Response.Status.CONFLICT);
+        }
+    }
+
     @GET
     @Path("send")
     public Collection<Command> get(@QueryParam("deviceId") long deviceId) throws StorageException {
@@ -106,7 +124,7 @@ public class CommandResource extends ExtendedObjectResource<Command> {
                         new Condition.Permission(Device.class, deviceId, baseClass)
                 ))));
 
-        return commands.stream().filter(command -> {
+        return commands.stream().filter(systemCommandService::isActive).filter(command -> {
             String type = command.getType();
             if (protocol != null) {
                 return command.getTextChannel() && protocol.getSupportedTextCommands().contains(type)
@@ -114,12 +132,15 @@ public class CommandResource extends ExtendedObjectResource<Command> {
             } else {
                 return type.equals(Command.TYPE_CUSTOM);
             }
-        }).toList();
+        }).sorted(Comparator.comparingInt(command -> command.getInteger(SystemCommandService.KEY_ORDER)))
+                .toList();
     }
 
     @POST
     @Path("send")
-    public Response send(Command entity, @QueryParam("groupId") long groupId) throws Exception {
+    public Response send(
+            Command entity, @QueryParam("groupId") long groupId,
+            @QueryParam("confirmed") boolean confirmed) throws Exception {
         if (entity.getId() > 0) {
             permissionsService.checkPermission(baseClass, getUserId(), entity.getId());
             long deviceId = entity.getDeviceId();
@@ -130,9 +151,23 @@ public class CommandResource extends ExtendedObjectResource<Command> {
             permissionsService.checkRestriction(getUserId(), UserRestrictions::getLimitCommands);
         }
 
+        if (systemCommandService.isCritical(entity)) {
+            if (!confirmed) {
+                throw new WebApplicationException("Critical command confirmation required", Response.Status.CONFLICT);
+            }
+            if (Command.TYPE_ENGINE_STOP.equals(entity.getType()) && groupId == 0) {
+                ensureVehicleStopped(entity.getDeviceId());
+            }
+        }
+
         if (groupId > 0) {
             permissionsService.checkPermission(Group.class, getUserId(), groupId);
             var devices = DeviceUtil.getAccessibleDevices(storage, getUserId(), List.of(), List.of(groupId));
+            if (systemCommandService.isCritical(entity) && Command.TYPE_ENGINE_STOP.equals(entity.getType())) {
+                for (Device device : devices) {
+                    ensureVehicleStopped(device.getId());
+                }
+            }
             List<QueuedCommand> queuedCommands = new ArrayList<>();
             for (Device device : devices) {
                 Command command = QueuedCommand.fromCommand(entity).toCommand();
@@ -143,18 +178,184 @@ public class CommandResource extends ExtendedObjectResource<Command> {
                 }
             }
             if (!queuedCommands.isEmpty()) {
+                actionLogger.command(request, getUserId(), groupId, entity.getDeviceId(), entity.getType());
                 return Response.accepted(queuedCommands).build();
             }
         } else {
             permissionsService.checkPermission(Device.class, getUserId(), entity.getDeviceId());
             QueuedCommand queuedCommand = commandsManager.sendCommand(entity);
             if (queuedCommand != null) {
+                actionLogger.command(request, getUserId(), groupId, entity.getDeviceId(), entity.getType());
                 return Response.accepted(queuedCommand).build();
             }
         }
 
         actionLogger.command(request, getUserId(), groupId, entity.getDeviceId(), entity.getType());
         return Response.ok(entity).build();
+    }
+
+    @Override
+    @POST
+    public Response add(Command entity) throws Exception {
+        if (systemCommandService.isSystemDefault(entity)) {
+            permissionsService.checkAdmin(getUserId());
+        }
+        return super.add(entity);
+    }
+
+    @Override
+    @Path("{id}")
+    @PUT
+    public Response update(Command entity) throws Exception {
+        Command existing = storage.getObject(Command.class, new Request(
+                new Columns.All(), new Condition.Equals("id", entity.getId())));
+        if (systemCommandService.isSystemDefault(existing) || systemCommandService.isSystemDefault(entity)) {
+            permissionsService.checkAdmin(getUserId());
+        }
+        return super.update(entity);
+    }
+
+    @Override
+    @Path("{id}")
+    @DELETE
+    public Response remove(@PathParam("id") long id) throws Exception {
+        if (systemCommandService.isSystemCommand(id)) {
+            permissionsService.checkAdmin(getUserId());
+        }
+        return super.remove(id);
+    }
+
+    private Command newSystemCommand(
+            String description, String type, int order, boolean critical,
+            String profiles, String category, String summary) {
+        Command command = new Command();
+        command.setDescription(description);
+        command.setType(type);
+        command.set(SystemCommandService.KEY_SYSTEM_DEFAULT, true);
+        command.set(SystemCommandService.KEY_ACTIVE, true);
+        command.set(SystemCommandService.KEY_ORDER, order);
+        command.set(SystemCommandService.KEY_CONFIRMATION, critical);
+        command.set(SystemCommandService.KEY_CRITICAL, critical);
+        command.set(SystemCommandService.KEY_NEW_USERS, true);
+        command.set(SystemCommandService.KEY_EXISTING_USERS, true);
+        command.set(SystemCommandService.KEY_PROFILES, profiles);
+        command.set(SystemCommandService.KEY_CATEGORY, category);
+        command.set(SystemCommandService.KEY_SUMMARY, summary);
+        return command;
+    }
+
+    @POST
+    @Path("defaults/bootstrap")
+    public Collection<Command> bootstrapDefaults() throws Exception {
+        permissionsService.checkAdmin(getUserId());
+        List<Command> definitions = List.of(
+                newSystemCommand("Solicitar localização agora", Command.TYPE_POSITION_SINGLE, 10, false,
+                        "administrator,manager,client", "location", "Solicita uma nova posição ao rastreador."),
+                newSystemCommand("Reiniciar rastreador", Command.TYPE_REBOOT_DEVICE, 20, false,
+                        "administrator,manager", "equipment", "Solicita a reinicialização do equipamento."),
+                newSystemCommand("Bloquear motor", Command.TYPE_ENGINE_STOP, 30, true,
+                        "administrator", "security", "Solicita o bloqueio seguro do veículo."),
+                newSystemCommand("Desbloquear motor", Command.TYPE_ENGINE_RESUME, 40, true,
+                        "administrator", "security", "Solicita a liberação do bloqueio do veículo."));
+        List<Command> existing = storage.getObjects(Command.class, new Request(new Columns.All()));
+        List<Command> result = new ArrayList<>();
+        for (Command definition : definitions) {
+            Command found = existing.stream()
+                    .filter(systemCommandService::isSystemDefault)
+                    .filter(command -> command.getType().equals(definition.getType()))
+                    .findFirst().orElse(null);
+            if (found == null) {
+                super.add(definition);
+                result.add(definition);
+            } else {
+                result.add(found);
+            }
+        }
+        return result;
+    }
+
+    private boolean matchesScope(User user, DefaultCommandApplyRequest scope) throws StorageException {
+        if (scope == null || (scope.userIds().isEmpty() && scope.groupIds().isEmpty())) {
+            return true;
+        }
+        if (scope.userIds().contains(user.getId())) {
+            return true;
+        }
+        for (long groupId : scope.groupIds()) {
+            if (!storage.getPermissions(User.class, user.getId(), Group.class, groupId).isEmpty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private DefaultCommandSummary summarize(boolean apply, DefaultCommandApplyRequest scope) throws Exception {
+        permissionsService.checkAdmin(getUserId());
+        List<User> users = storage.getObjects(User.class, new Request(new Columns.All())).stream()
+                .filter(user -> {
+                    try {
+                        return matchesScope(user, scope);
+                    } catch (StorageException error) {
+                        throw new WebApplicationException(error);
+                    }
+                })
+                .toList();
+        int created = 0;
+        int existing = 0;
+        int ignoredUsers = 0;
+        List<String> failures = new ArrayList<>();
+        for (User user : users) {
+            SystemCommandService.AssignmentResult result = apply
+                    ? systemCommandService.assignToUser(user, false, true)
+                    : systemCommandService.previewForUser(user, false);
+            created += result.created();
+            existing += result.existing();
+            if (result.created() == 0 && result.existing() == 0 && result.ignored() > 0) {
+                ignoredUsers += 1;
+            }
+            result.failures().forEach(failure -> failures.add("userId=" + user.getId() + ": " + failure));
+            if (apply) {
+                for (long commandId : result.createdCommandIds()) {
+                    actionLogger.link(request, getUserId(), User.class, user.getId(), Command.class, commandId);
+                }
+            }
+        }
+        List<Map<String, Object>> commands = systemCommandService.getSystemCommands(false).stream()
+                .map(command -> Map.<String, Object>of(
+                        "id", command.getId(), "description", command.getDescription(), "type", command.getType()))
+                .toList();
+        return new DefaultCommandSummary(users.size(), created, existing, ignoredUsers, commands, failures);
+    }
+
+    @GET
+    @Path("defaults/preview")
+    public DefaultCommandSummary previewDefaults() throws Exception {
+        return summarize(false, new DefaultCommandApplyRequest(List.of(), List.of()));
+    }
+
+    @POST
+    @Path("defaults/preview")
+    public DefaultCommandSummary previewDefaults(DefaultCommandApplyRequest body) throws Exception {
+        return summarize(false, body);
+    }
+
+    @POST
+    @Path("defaults/apply")
+    public DefaultCommandSummary applyDefaults(DefaultCommandApplyRequest body) throws Exception {
+        return summarize(true, body);
+    }
+
+    public record DefaultCommandApplyRequest(List<Long> userIds, List<Long> groupIds) {
+
+        public DefaultCommandApplyRequest {
+            userIds = userIds != null ? userIds : List.of();
+            groupIds = groupIds != null ? groupIds : List.of();
+        }
+    }
+
+    public record DefaultCommandSummary(
+            int users, int created, int existing, int ignoredUsers,
+            List<Map<String, Object>> commands, List<String> failures) {
     }
 
     @GET
