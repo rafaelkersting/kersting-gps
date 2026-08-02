@@ -442,6 +442,11 @@ paths:
                   type: array
                   items:
                     type: integer
+                commandIds:
+                  description: Optional command ids to preview; empty means all active defaults
+                  type: array
+                  items:
+                    type: integer
       responses:
         '200':
           description: Filtered assignment preview
@@ -470,6 +475,11 @@ paths:
                   type: array
                   items:
                     type: integer
+                commandIds:
+                  description: Optional command ids to apply; empty means all active defaults
+                  type: array
+                  items:
+                    type: integer
         required: true
       responses:
         '200':
@@ -478,6 +488,36 @@ paths:
             application/json:
               schema:
                 type: object
+        '401':
+          description: Unauthorized
+          content: {}
+  /commands/defaults/options:
+    get:
+      operationId: getCommandsDefaultsOptions
+      summary: Fetch users, groups and devices available to configure a default command
+      description: Administrator only. Disabled users remain listed but cannot be assigned automatically.
+      tags:
+        - Commands
+      responses:
+        '200':
+          description: Selection options with user profile, group and status information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items:
+                      type: object
+                  groups:
+                    type: array
+                    items:
+                      type: object
+                  devices:
+                    type: array
+                    items:
+                      type: object
         '401':
           description: Unauthorized
           content: {}

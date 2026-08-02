@@ -13,7 +13,10 @@ import org.junit.jupiter.api.Test;
 import org.traccar.model.Command;
 import org.traccar.model.User;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SystemCommandServiceTest {
@@ -38,7 +41,7 @@ public class SystemCommandServiceTest {
     }
 
     @Test
-    public void testProfileEligibility() {
+    public void testProfileEligibility() throws Exception {
         User administrator = new User();
         administrator.setAdministrator(true);
         assertTrue(service.isEligible(administrator, command("administrator")));
@@ -52,6 +55,13 @@ public class SystemCommandServiceTest {
         assertTrue(service.isEligible(client, command("client")));
         client.setReadonly(true);
         assertFalse(service.isEligible(client, command("client")));
+    }
+
+    @Test
+    public void testProfileSelectionRequiresExplicitValue() throws Exception {
+        User client = new User();
+        assertFalse(service.isEligible(client, command("")));
+        assertEquals(List.of(1L, 2L), SystemCommandService.parseIds("1, 2, 1"));
     }
 
 }

@@ -128,6 +128,9 @@ public class PermissionsResource  extends BaseResource {
                 for (long commandId : result.createdCommandIds()) {
                     actionLogger.link(request, getUserId(), User.class, user.getId(), Command.class, commandId);
                 }
+                for (long commandId : result.removedCommandIds()) {
+                    actionLogger.unlink(request, getUserId(), User.class, user.getId(), Command.class, commandId);
+                }
             }
         }
         return Response.noContent().build();
@@ -155,6 +158,16 @@ public class PermissionsResource  extends BaseResource {
             actionLogger.unlink(request, getUserId(),
                     permission.getOwnerClass(), permission.getOwnerId(),
                     permission.getPropertyClass(), permission.getPropertyId());
+            if (permission.getOwnerClass().equals(User.class)
+                    && (permission.getPropertyClass().equals(Device.class)
+                    || permission.getPropertyClass().equals(Group.class))) {
+                User user = storage.getObject(User.class, new Request(
+                        new Columns.All(), new Condition.Equals("id", permission.getOwnerId())));
+                SystemCommandService.AssignmentResult result = systemCommandService.assignToUser(user, false, true);
+                for (long commandId : result.removedCommandIds()) {
+                    actionLogger.unlink(request, getUserId(), User.class, user.getId(), Command.class, commandId);
+                }
+            }
         }
         return Response.noContent().build();
     }

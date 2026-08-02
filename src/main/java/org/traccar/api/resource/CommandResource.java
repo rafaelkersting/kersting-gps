@@ -199,8 +199,11 @@ public class CommandResource extends ExtendedObjectResource<Command> {
     public Response add(Command entity) throws Exception {
         if (systemCommandService.isSystemDefault(entity)) {
             permissionsService.checkAdmin(getUserId());
+            validateSystemCommand(entity);
         }
-        return super.add(entity);
+        Response response = super.add(entity);
+        systemCommandService.reconcileDeviceLinks(entity);
+        return response;
     }
 
     @Override
@@ -211,8 +214,20 @@ public class CommandResource extends ExtendedObjectResource<Command> {
                 new Columns.All(), new Condition.Equals("id", entity.getId())));
         if (systemCommandService.isSystemDefault(existing) || systemCommandService.isSystemDefault(entity)) {
             permissionsService.checkAdmin(getUserId());
+            validateSystemCommand(entity);
         }
-        return super.update(entity);
+        Response response = super.update(entity);
+        systemCommandService.reconcileDeviceLinks(entity);
+        return response;
+    }
+
+    private void validateSystemCommand(Command command) {
+        if (systemCommandService.isSystemDefault(command)
+                && systemCommandService.isActive(command)
+                && command.getString(SystemCommandService.KEY_PROFILES, "").isBlank()) {
+            throw new WebApplicationException(
+                    "Selecione pelo menos um perfil autorizado.", Response.Status.BAD_REQUEST);
+        }
     }
 
     @Override
@@ -241,7 +256,37 @@ public class CommandResource extends ExtendedObjectResource<Command> {
         command.set(SystemCommandService.KEY_PROFILES, profiles);
         command.set(SystemCommandService.KEY_CATEGORY, category);
         command.set(SystemCommandService.KEY_SUMMARY, summary);
+        command.set(SystemCommandService.KEY_USER_SCOPE, SystemCommandService.SCOPE_ALL);
+        command.set(SystemCommandService.KEY_DEVICE_SCOPE, SystemCommandService.SCOPE_ALL);
         return command;
+    }
+
+    private void normalizeLegacyEngineStop(Command command) throws StorageException {
+        if (!Command.TYPE_ENGINE_STOP.equals(command.getType())) {
+            return;
+        }
+        boolean changed = false;
+        if ("Desligar Motor".equalsIgnoreCase(command.getDescription())) {
+            command.setDescription("Bloquear Motor");
+            changed = true;
+        }
+        if (command.getString(SystemCommandService.KEY_PROFILES, "").isBlank()) {
+            command.set(SystemCommandService.KEY_PROFILES, "administrator,manager");
+            changed = true;
+        }
+        if (!command.getBoolean(SystemCommandService.KEY_CRITICAL)) {
+            command.set(SystemCommandService.KEY_CRITICAL, true);
+            command.set(SystemCommandService.KEY_CONFIRMATION, true);
+            changed = true;
+        }
+        if (!"security".equals(command.getString(SystemCommandService.KEY_CATEGORY))) {
+            command.set(SystemCommandService.KEY_CATEGORY, "security");
+            changed = true;
+        }
+        if (changed) {
+            storage.updateObject(command, new Request(
+                    new Columns.Exclude("id"), new Condition.Equals("id", command.getId())));
+        }
     }
 
     @POST
@@ -253,8 +298,8 @@ public class CommandResource extends ExtendedObjectResource<Command> {
                         "administrator,manager,client", "location", "Solicita uma nova posição ao rastreador."),
                 newSystemCommand("Reiniciar rastreador", Command.TYPE_REBOOT_DEVICE, 20, false,
                         "administrator,manager", "equipment", "Solicita a reinicialização do equipamento."),
-                newSystemCommand("Bloquear motor", Command.TYPE_ENGINE_STOP, 30, true,
-                        "administrator", "security", "Solicita o bloqueio seguro do veículo."),
+                newSystemCommand("Bloquear Motor", Command.TYPE_ENGINE_STOP, 30, true,
+                        "administrator,manager", "security", "Solicita o bloqueio seguro do veículo."),
                 newSystemCommand("Desbloquear motor", Command.TYPE_ENGINE_RESUME, 40, true,
                         "administrator", "security", "Solicita a liberação do bloqueio do veículo."));
         List<Command> existing = storage.getObjects(Command.class, new Request(new Columns.All()));
@@ -266,8 +311,11 @@ public class CommandResource extends ExtendedObjectResource<Command> {
                     .findFirst().orElse(null);
             if (found == null) {
                 super.add(definition);
+                systemCommandService.reconcileDeviceLinks(definition);
                 result.add(definition);
             } else {
+                normalizeLegacyEngineStop(found);
+                systemCommandService.reconcileDeviceLinks(found);
                 result.add(found);
             }
         }
@@ -291,26 +339,31 @@ public class CommandResource extends ExtendedObjectResource<Command> {
 
     private DefaultCommandSummary summarize(boolean apply, DefaultCommandApplyRequest scope) throws Exception {
         permissionsService.checkAdmin(getUserId());
+        DefaultCommandApplyRequest effectiveScope = scope != null
+                ? scope : new DefaultCommandApplyRequest(List.of(), List.of(), List.of());
         List<User> users = storage.getObjects(User.class, new Request(new Columns.All())).stream()
                 .filter(user -> {
                     try {
-                        return matchesScope(user, scope);
+                        return matchesScope(user, effectiveScope);
                     } catch (StorageException error) {
                         throw new WebApplicationException(error);
                     }
                 })
                 .toList();
+        int eligibleUsers = 0;
         int created = 0;
         int existing = 0;
         int ignoredUsers = 0;
         List<String> failures = new ArrayList<>();
         for (User user : users) {
             SystemCommandService.AssignmentResult result = apply
-                    ? systemCommandService.assignToUser(user, false, true)
-                    : systemCommandService.previewForUser(user, false);
+                    ? systemCommandService.assignToUser(user, false, true, effectiveScope.commandIds())
+                    : systemCommandService.previewForUser(user, false, effectiveScope.commandIds());
             created += result.created();
             existing += result.existing();
-            if (result.created() == 0 && result.existing() == 0 && result.ignored() > 0) {
+            if (result.created() > 0 || result.existing() > 0) {
+                eligibleUsers += 1;
+            } else if (result.ignored() > 0) {
                 ignoredUsers += 1;
             }
             result.failures().forEach(failure -> failures.add("userId=" + user.getId() + ": " + failure));
@@ -318,19 +371,23 @@ public class CommandResource extends ExtendedObjectResource<Command> {
                 for (long commandId : result.createdCommandIds()) {
                     actionLogger.link(request, getUserId(), User.class, user.getId(), Command.class, commandId);
                 }
+                for (long commandId : result.removedCommandIds()) {
+                    actionLogger.unlink(request, getUserId(), User.class, user.getId(), Command.class, commandId);
+                }
             }
         }
-        List<Map<String, Object>> commands = systemCommandService.getSystemCommands(false).stream()
+        List<Map<String, Object>> commands = systemCommandService
+                .getSystemCommands(false, effectiveScope.commandIds()).stream()
                 .map(command -> Map.<String, Object>of(
                         "id", command.getId(), "description", command.getDescription(), "type", command.getType()))
                 .toList();
-        return new DefaultCommandSummary(users.size(), created, existing, ignoredUsers, commands, failures);
+        return new DefaultCommandSummary(eligibleUsers, created, existing, ignoredUsers, commands, failures);
     }
 
     @GET
     @Path("defaults/preview")
     public DefaultCommandSummary previewDefaults() throws Exception {
-        return summarize(false, new DefaultCommandApplyRequest(List.of(), List.of()));
+        return summarize(false, new DefaultCommandApplyRequest(List.of(), List.of(), List.of()));
     }
 
     @POST
@@ -345,12 +402,52 @@ public class CommandResource extends ExtendedObjectResource<Command> {
         return summarize(true, body);
     }
 
-    public record DefaultCommandApplyRequest(List<Long> userIds, List<Long> groupIds) {
+    public record DefaultCommandApplyRequest(List<Long> userIds, List<Long> groupIds, List<Long> commandIds) {
 
         public DefaultCommandApplyRequest {
             userIds = userIds != null ? userIds : List.of();
             groupIds = groupIds != null ? groupIds : List.of();
+            commandIds = commandIds != null ? commandIds : List.of();
         }
+    }
+
+    @GET
+    @Path("defaults/options")
+    public DefaultCommandOptions getDefaultCommandOptions() throws Exception {
+        permissionsService.checkAdmin(getUserId());
+        List<Group> groups = storage.getObjects(Group.class, new Request(new Columns.All()));
+        List<UserOption> users = new ArrayList<>();
+        for (User user : storage.getObjects(User.class, new Request(new Columns.All()))) {
+            List<Long> groupIds = groups.stream().filter(group -> {
+                try {
+                    return !storage.getPermissions(User.class, user.getId(), Group.class, group.getId()).isEmpty();
+                } catch (StorageException error) {
+                    throw new WebApplicationException(error);
+                }
+            }).map(Group::getId).toList();
+            List<String> groupNames = groups.stream()
+                    .filter(group -> groupIds.contains(group.getId())).map(Group::getName).toList();
+            users.add(new UserOption(
+                    user.getId(), user.getName(), user.getEmail(), systemCommandService.getProfile(user),
+                    groupIds, groupNames, user.getDisabled(), user.getReadonly(), user.getTemporary()));
+        }
+        List<SelectionOption> groupOptions = groups.stream()
+                .map(group -> new SelectionOption(group.getId(), group.getName(), group.getGroupId())).toList();
+        List<SelectionOption> deviceOptions = storage.getObjects(Device.class, new Request(new Columns.All())).stream()
+                .map(device -> new SelectionOption(device.getId(), device.getName(), device.getGroupId())).toList();
+        return new DefaultCommandOptions(users, groupOptions, deviceOptions);
+    }
+
+    public record UserOption(
+            long id, String name, String email, String profile, List<Long> groupIds, List<String> groupNames,
+            boolean disabled, boolean readonly, boolean temporary) {
+    }
+
+    public record SelectionOption(long id, String name, long groupId) {
+    }
+
+    public record DefaultCommandOptions(
+            List<UserOption> users, List<SelectionOption> groups, List<SelectionOption> devices) {
     }
 
     public record DefaultCommandSummary(

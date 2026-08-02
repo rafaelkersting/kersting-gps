@@ -15,8 +15,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.traccar.model.Command;
 import org.traccar.model.Device;
+import org.traccar.model.Group;
 import org.traccar.model.Permission;
 import org.traccar.model.User;
+import org.traccar.helper.model.DeviceUtil;
 import org.traccar.session.ConnectionManager;
 import org.traccar.session.cache.CacheManager;
 import org.traccar.storage.Storage;
@@ -27,8 +29,13 @@ import org.traccar.storage.query.Request;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Singleton
 public class SystemCommandService {
@@ -45,6 +52,17 @@ public class SystemCommandService {
     public static final String KEY_PROFILES = "systemDefaultProfiles";
     public static final String KEY_CATEGORY = "systemDefaultCategory";
     public static final String KEY_SUMMARY = "systemDefaultSummary";
+    public static final String KEY_USER_SCOPE = "systemDefaultUserScope";
+    public static final String KEY_USER_IDS = "systemDefaultUserIds";
+    public static final String KEY_USER_GROUP_IDS = "systemDefaultUserGroupIds";
+    public static final String KEY_DEVICE_SCOPE = "systemDefaultDeviceScope";
+    public static final String KEY_DEVICE_IDS = "systemDefaultDeviceIds";
+    public static final String KEY_DEVICE_GROUP_IDS = "systemDefaultDeviceGroupIds";
+
+    public static final String SCOPE_ALL = "all";
+    public static final String SCOPE_USERS = "users";
+    public static final String SCOPE_GROUPS = "groups";
+    public static final String SCOPE_DEVICES = "devices";
 
     private final Storage storage;
     private final CacheManager cacheManager;
@@ -63,7 +81,7 @@ public class SystemCommandService {
     }
 
     public boolean isActive(Command command) {
-        return !isSystemDefault(command) || command.getBoolean(KEY_ACTIVE);
+        return !isSystemDefault(command) || !command.hasAttribute(KEY_ACTIVE) || command.getBoolean(KEY_ACTIVE);
     }
 
     public boolean isCritical(Command command) {
@@ -81,18 +99,63 @@ public class SystemCommandService {
                 .stream()
                 .filter(this::isSystemDefault)
                 .filter(this::isActive)
-                .filter(command -> command.getBoolean(newUsers ? KEY_NEW_USERS : KEY_EXISTING_USERS))
+                .filter(command -> {
+                    String key = newUsers ? KEY_NEW_USERS : KEY_EXISTING_USERS;
+                    return !command.hasAttribute(key) || command.getBoolean(key);
+                })
                 .sorted(Comparator.comparingInt(command -> command.getInteger(KEY_ORDER)))
                 .toList();
     }
 
-    public boolean isEligible(User user, Command command) {
+    public List<Command> getSystemCommands(boolean newUsers, Collection<Long> commandIds) throws StorageException {
+        return getSystemCommands(newUsers).stream()
+                .filter(command -> commandIds == null || commandIds.isEmpty() || commandIds.contains(command.getId()))
+                .toList();
+    }
+
+    public static List<Long> parseIds(String value) {
+        if (value == null || value.isBlank()) {
+            return List.of();
+        }
+        return Arrays.stream(value.split(","))
+                .map(String::trim)
+                .filter(item -> !item.isEmpty())
+                .map(Long::parseLong)
+                .distinct()
+                .toList();
+    }
+
+    public String getProfile(User user) {
+        return user.getAdministrator() ? "administrator" : user.getManager() ? "manager" : "client";
+    }
+
+    public boolean matchesProfile(User user, Command command) {
+        String profile = getProfile(user);
+        String profiles = command.getString(KEY_PROFILES, "");
+        return Arrays.stream(profiles.split(",")).map(String::trim).anyMatch(profile::equals);
+    }
+
+    public boolean matchesUserScope(User user, Command command) throws StorageException {
+        String scope = command.getString(KEY_USER_SCOPE, SCOPE_ALL);
+        if (SCOPE_USERS.equals(scope)) {
+            return parseIds(command.getString(KEY_USER_IDS, "")).contains(user.getId());
+        }
+        if (SCOPE_GROUPS.equals(scope)) {
+            for (long groupId : parseIds(command.getString(KEY_USER_GROUP_IDS, ""))) {
+                if (!storage.getPermissions(User.class, user.getId(), Group.class, groupId).isEmpty()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return true;
+    }
+
+    public boolean isEligible(User user, Command command) throws StorageException {
         if (user == null || user.getDisabled() || user.getTemporary() || user.getReadonly()) {
             return false;
         }
-        String profile = user.getAdministrator() ? "administrator" : user.getManager() ? "manager" : "client";
-        String profiles = command.getString(KEY_PROFILES, "administrator");
-        return Arrays.stream(profiles.split(",")).map(String::trim).anyMatch(profile::equals);
+        return matchesProfile(user, command) && matchesUserScope(user, command);
     }
 
     public boolean hasPermission(long userId, long commandId) throws StorageException {
@@ -113,15 +176,36 @@ public class SystemCommandService {
                 permission.getPropertyClass(), permission.getPropertyId(), true);
     }
 
+    private void removePermission(Permission permission) throws Exception {
+        storage.removePermission(permission);
+        cacheManager.invalidatePermission(
+                true, permission.getOwnerClass(), permission.getOwnerId(),
+                permission.getPropertyClass(), permission.getPropertyId(), false);
+        connectionManager.invalidatePermission(
+                true, permission.getOwnerClass(), permission.getOwnerId(),
+                permission.getPropertyClass(), permission.getPropertyId(), false);
+    }
+
     public AssignmentResult assignToUser(User user, boolean newUser, boolean applyDeviceLinks) {
+        return assignToUser(user, newUser, applyDeviceLinks, List.of());
+    }
+
+    public AssignmentResult assignToUser(
+            User user, boolean newUser, boolean applyDeviceLinks, Collection<Long> commandIds) {
         int created = 0;
         int existing = 0;
         int ignored = 0;
         List<Long> createdCommandIds = new ArrayList<>();
+        List<Long> removedCommandIds = new ArrayList<>();
         List<String> failures = new ArrayList<>();
         try {
-            for (Command command : getSystemCommands(newUser)) {
+            for (Command command : getSystemCommands(newUser, commandIds)) {
                 if (!isEligible(user, command)) {
+                    if (hasPermission(user.getId(), command.getId())) {
+                        removePermission(new Permission(
+                                User.class, user.getId(), Command.class, command.getId()));
+                        removedCommandIds.add(command.getId());
+                    }
                     ignored += 1;
                     continue;
                 }
@@ -140,16 +224,21 @@ public class SystemCommandService {
             LOGGER.warn("Failed to assign system commands to user {}", user.getId(), error);
             failures.add(error.getMessage());
         }
-        return new AssignmentResult(created, existing, ignored, createdCommandIds, failures);
+        return new AssignmentResult(
+                created, existing, ignored, createdCommandIds, removedCommandIds, failures);
     }
 
     public AssignmentResult previewForUser(User user, boolean newUser) {
+        return previewForUser(user, newUser, List.of());
+    }
+
+    public AssignmentResult previewForUser(User user, boolean newUser, Collection<Long> commandIds) {
         int created = 0;
         int existing = 0;
         int ignored = 0;
         List<String> failures = new ArrayList<>();
         try {
-            for (Command command : getSystemCommands(newUser)) {
+            for (Command command : getSystemCommands(newUser, commandIds)) {
                 if (!isEligible(user, command)) {
                     ignored += 1;
                 } else if (hasPermission(user.getId(), command.getId())) {
@@ -161,12 +250,59 @@ public class SystemCommandService {
         } catch (Exception error) {
             failures.add(error.getMessage());
         }
-        return new AssignmentResult(created, existing, ignored, List.of(), failures);
+        return new AssignmentResult(created, existing, ignored, List.of(), List.of(), failures);
+    }
+
+    private boolean isSelectedGroup(long groupId, List<Long> selectedGroups, Map<Long, Long> parents) {
+        Set<Long> visited = new HashSet<>();
+        while (groupId > 0 && visited.add(groupId)) {
+            if (selectedGroups.contains(groupId)) {
+                return true;
+            }
+            groupId = parents.getOrDefault(groupId, 0L);
+        }
+        return false;
+    }
+
+    public void reconcileDeviceLinks(Command command) throws Exception {
+        if (!isSystemDefault(command)) {
+            return;
+        }
+        String scope = command.getString(KEY_DEVICE_SCOPE, SCOPE_ALL);
+        List<Long> selectedDeviceIds = parseIds(command.getString(KEY_DEVICE_IDS, ""));
+        List<Long> selectedGroupIds = parseIds(command.getString(KEY_DEVICE_GROUP_IDS, ""));
+        Map<Long, Long> groupParents = new HashMap<>();
+        for (Group group : storage.getObjects(Group.class, new Request(new Columns.All()))) {
+            groupParents.put(group.getId(), group.getGroupId());
+        }
+        for (Device device : storage.getObjects(Device.class, new Request(new Columns.All()))) {
+            boolean allowed = SCOPE_ALL.equals(scope)
+                    || SCOPE_DEVICES.equals(scope) && selectedDeviceIds.contains(device.getId())
+                    || SCOPE_GROUPS.equals(scope)
+                    && isSelectedGroup(device.getGroupId(), selectedGroupIds, groupParents);
+            boolean linked = hasDeviceLink(device.getId(), command.getId());
+            Permission permission = new Permission(
+                    Device.class, device.getId(), Command.class, command.getId());
+            if (allowed && !linked) {
+                addPermission(permission);
+            } else if (!allowed && linked) {
+                removePermission(permission);
+            }
+        }
     }
 
     private void linkAccessibleDevices(User user, Command command, List<String> failures) throws Exception {
-        List<Device> devices = storage.getObjects(Device.class, new Request(
-                new Columns.All(), new Condition.Permission(User.class, user.getId(), Device.class)));
+        String scope = command.getString(KEY_DEVICE_SCOPE, SCOPE_ALL);
+        Collection<Device> devices;
+        if (SCOPE_GROUPS.equals(scope)) {
+            devices = DeviceUtil.getAccessibleDevices(storage, user.getId(), List.of(),
+                    parseIds(command.getString(KEY_DEVICE_GROUP_IDS, "")));
+        } else if (SCOPE_DEVICES.equals(scope)) {
+            devices = DeviceUtil.getAccessibleDevices(storage, user.getId(),
+                    parseIds(command.getString(KEY_DEVICE_IDS, "")), List.of());
+        } else {
+            devices = DeviceUtil.getAccessibleDevices(storage, user.getId(), List.of(), List.of());
+        }
         for (Device device : devices) {
             try {
                 // Link the catalog permission once. CommandResource applies protocol compatibility
@@ -182,6 +318,7 @@ public class SystemCommandService {
     }
 
     public record AssignmentResult(
-            int created, int existing, int ignored, List<Long> createdCommandIds, List<String> failures) {
+            int created, int existing, int ignored, List<Long> createdCommandIds,
+            List<Long> removedCommandIds, List<String> failures) {
     }
 }
