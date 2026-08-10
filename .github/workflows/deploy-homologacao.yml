@@ -1,0 +1,283 @@
+name: Publicar Homologação
+
+on:
+  workflow_dispatch:
+    inputs:
+      referencia:
+        description: Referência que será publicada
+        required: true
+        default: release/v0.1.0-homologacao
+        type: string
+      tipo_publicacao:
+        description: Tipo de publicação
+        required: true
+        default: frontend
+        type: choice
+        options:
+          - frontend
+          - completo
+      confirmacao:
+        description: Digite PUBLICAR para confirmar
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kersting-gps-homologacao
+  cancel-in-progress: false
+
+env:
+  ALLOWED_REF: release/v0.1.0-homologacao
+  INCOMING_DIR: /var/tmp/kersting-gps-deploy
+
+jobs:
+  publicar:
+    name: Publicar ${{ inputs.tipo_publicacao }} em homologação
+    runs-on: ubuntu-latest
+    environment: homologacao
+    timeout-minutes: 45
+
+    steps:
+      - name: Validar autorização e parâmetros
+        shell: bash
+        env:
+          INPUT_REF: ${{ inputs.referencia }}
+          INPUT_TYPE: ${{ inputs.tipo_publicacao }}
+          INPUT_CONFIRMATION: ${{ inputs.confirmacao }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$INPUT_CONFIRMATION" != "PUBLICAR" ]]; then
+            echo "::error::Confirmação inválida. Digite exatamente PUBLICAR. Nenhuma conexão com a VPS foi realizada."
+            exit 1
+          fi
+
+          if [[ "$INPUT_REF" != "$ALLOWED_REF" ]]; then
+            echo "::error::Referência não autorizada. Somente $ALLOWED_REF pode ser publicada."
+            exit 1
+          fi
+
+          if [[ "$INPUT_TYPE" != "frontend" && "$INPUT_TYPE" != "completo" ]]; then
+            echo "::error::Tipo de publicação inválido."
+            exit 1
+          fi
+
+          printf 'DEPLOY_REF=%s\n' "$INPUT_REF" >> "$GITHUB_ENV"
+          printf 'DEPLOY_TYPE=%s\n' "$INPUT_TYPE" >> "$GITHUB_ENV"
+
+      - name: Obter a referência autorizada
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.referencia }}
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: false
+
+      - name: Inicializar o frontend no gitlink registrado
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          EXPECTED_FRONTEND_COMMIT="$(git ls-tree HEAD traccar-web | awk '{print $3}')"
+          if [[ ! "$EXPECTED_FRONTEND_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Não foi possível identificar o gitlink do submódulo traccar-web."
+            exit 1
+          fi
+
+          git submodule sync --recursive
+          if ! git submodule update --init --recursive; then
+            echo "::error::O commit $EXPECTED_FRONTEND_COMMIT do traccar-web não está disponível. Publique primeiro o commit do frontend no repositório remoto."
+            exit 1
+          fi
+
+          ACTUAL_FRONTEND_COMMIT="$(git -C traccar-web rev-parse HEAD)"
+          if [[ "$ACTUAL_FRONTEND_COMMIT" != "$EXPECTED_FRONTEND_COMMIT" ]]; then
+            echo "::error::O submódulo foi inicializado em $ACTUAL_FRONTEND_COMMIT, mas o projeto registra $EXPECTED_FRONTEND_COMMIT."
+            exit 1
+          fi
+
+          MAIN_COMMIT="$(git rev-parse HEAD)"
+          echo "Commit principal: $MAIN_COMMIT"
+          echo "Commit frontend:  $ACTUAL_FRONTEND_COMMIT"
+          printf 'MAIN_COMMIT=%s\n' "$MAIN_COMMIT" >> "$GITHUB_ENV"
+          printf 'FRONTEND_COMMIT=%s\n' "$ACTUAL_FRONTEND_COMMIT" >> "$GITHUB_ENV"
+
+      - name: Preparar Node.js 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: traccar-web/package-lock.json
+
+      - name: Compilar o frontend
+        working-directory: traccar-web
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+          test -s build/index.html || {
+            echo "::error::O build do frontend não gerou build/index.html."
+            exit 1
+          }
+
+      - name: Preparar Java 21
+        if: env.DEPLOY_TYPE == 'completo'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Compilar o backend
+        if: env.DEPLOY_TYPE == 'completo'
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          ./gradlew clean assemble --no-daemon --stacktrace
+          test -s target/tracker-server.jar || {
+            echo "::error::O build não gerou target/tracker-server.jar."
+            exit 1
+          }
+          test -d target/lib && test -n "$(find target/lib -mindepth 1 -maxdepth 1 -print -quit)" || {
+            echo "::error::O build não gerou as bibliotecas em target/lib."
+            exit 1
+          }
+
+      - name: Criar pacote de publicação
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          PACKAGE_DIR="$RUNNER_TEMP/kersting-package"
+          ARCHIVE_NAME="kersting-gps-${MAIN_COMMIT}-${DEPLOY_TYPE}.tar.gz"
+          ARCHIVE_PATH="$RUNNER_TEMP/$ARCHIVE_NAME"
+          rm -rf "$PACKAGE_DIR"
+          mkdir -p "$PACKAGE_DIR/web"
+          cp -a traccar-web/build/. "$PACKAGE_DIR/web/"
+
+          if [[ "$DEPLOY_TYPE" == "completo" ]]; then
+            cp target/tracker-server.jar "$PACKAGE_DIR/tracker-server.jar"
+            cp -a target/lib "$PACKAGE_DIR/lib"
+          fi
+
+          {
+            printf 'main_commit=%s\n' "$MAIN_COMMIT"
+            printf 'frontend_commit=%s\n' "$FRONTEND_COMMIT"
+            printf 'type=%s\n' "$DEPLOY_TYPE"
+            printf 'built_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > "$PACKAGE_DIR/deploy-info"
+
+          tar -C "$PACKAGE_DIR" -czf "$ARCHIVE_PATH" .
+          ARCHIVE_SHA256="$(sha256sum "$ARCHIVE_PATH" | awk '{print $1}')"
+          echo "Pacote: $ARCHIVE_NAME"
+          echo "SHA-256: $ARCHIVE_SHA256"
+          printf 'ARCHIVE_NAME=%s\n' "$ARCHIVE_NAME" >> "$GITHUB_ENV"
+          printf 'ARCHIVE_PATH=%s\n' "$ARCHIVE_PATH" >> "$GITHUB_ENV"
+          printf 'ARCHIVE_SHA256=%s\n' "$ARCHIVE_SHA256" >> "$GITHUB_ENV"
+
+      - name: Configurar conexão SSH verificada
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          umask 077
+
+          [[ -n "$VPS_HOST" && -n "$VPS_SSH_KEY" && -n "$VPS_KNOWN_HOSTS" ]] || {
+            echo "::error::Secrets SSH obrigatórios não foram configurados."
+            exit 1
+          }
+          [[ "$VPS_USER" == "deploy" ]] || {
+            echo "::error::VPS_USER deve ser exatamente deploy."
+            exit 1
+          }
+          [[ "$VPS_PORT" =~ ^[0-9]{1,5}$ ]] && (( VPS_PORT >= 1 && VPS_PORT <= 65535 )) || {
+            echo "::error::VPS_PORT inválida."
+            exit 1
+          }
+
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$VPS_SSH_KEY" > "$HOME/.ssh/deploy_key"
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/deploy_key" "$HOME/.ssh/known_hosts"
+
+      - name: Enviar pacote para a VPS
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          set -euo pipefail
+          REMOTE="$VPS_USER@$VPS_HOST"
+          SSH_OPTIONS=(
+            -p "$VPS_PORT"
+            -i "$HOME/.ssh/deploy_key"
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+          )
+
+          ssh "${SSH_OPTIONS[@]}" "$REMOTE" "test -d '$INCOMING_DIR' && test -w '$INCOMING_DIR'"
+          scp \
+            -P "$VPS_PORT" \
+            -i "$HOME/.ssh/deploy_key" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$ARCHIVE_PATH" "$REMOTE:$INCOMING_DIR/$ARCHIVE_NAME"
+
+      - name: Publicar e validar com rollback automático
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          set -euo pipefail
+          REMOTE="$VPS_USER@$VPS_HOST"
+          SSH_OPTIONS=(
+            -p "$VPS_PORT"
+            -i "$HOME/.ssh/deploy_key"
+            -o BatchMode=yes
+            -o IdentitiesOnly=yes
+            -o StrictHostKeyChecking=yes
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts"
+          )
+
+          ssh "${SSH_OPTIONS[@]}" "$REMOTE" \
+            "sudo -n /usr/local/sbin/deploy-kersting-gps '$DEPLOY_TYPE' '$ARCHIVE_NAME' '$MAIN_COMMIT' '$ARCHIVE_SHA256'"
+
+      - name: Remover pacote temporário da VPS
+        if: always() && env.ARCHIVE_NAME != ''
+        continue-on-error: true
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+        run: |
+          ssh \
+            -p "$VPS_PORT" \
+            -i "$HOME/.ssh/deploy_key" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/known_hosts" \
+            "$VPS_USER@$VPS_HOST" "rm -f '$INCOMING_DIR/$ARCHIVE_NAME'"
+
+      - name: Remover credenciais temporárias do runner
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/deploy_key" "$HOME/.ssh/known_hosts"
