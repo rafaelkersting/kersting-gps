@@ -9,4 +9,8 @@
     <entry key='database.user'>sa</entry>
     <entry key='database.password' />
 
+    <!-- Preserve the last valid ignition state when devices omit it from intermittent packets. -->
+    <entry key='processing.copyAttributes.enable'>true</entry>
+    <entry key='processing.copyAttributes'>ignition</entry>
+
 </properties>
