@@ -62,10 +62,45 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
         this.baseClass = baseClass;
     }
 
+    protected String getViewAccessPermission() {
+        return null;
+    }
+
+    protected String getViewAccessPermission(long id) {
+        return getViewAccessPermission();
+    }
+
+    protected String getCreateAccessPermission() {
+        return null;
+    }
+
+    protected String getEditAccessPermission() {
+        return null;
+    }
+
+    protected String getEditAccessPermission(T entity) {
+        return getEditAccessPermission();
+    }
+
+    protected String getDeleteAccessPermission() {
+        return null;
+    }
+
+    protected String getDeleteAccessPermission(long id) {
+        return getDeleteAccessPermission();
+    }
+
+    protected void checkAccessPermission(String permission) throws StorageException {
+        if (permission != null) {
+            accessControlService.checkPermission(getUserId(), permission);
+        }
+    }
+
     @Path("{id}")
     @GET
     public Response getSingle(@PathParam("id") long id) throws StorageException {
         permissionsService.checkPermission(baseClass, getUserId(), id);
+        checkAccessPermission(getViewAccessPermission(id));
         T entity = storage.getObject(baseClass, new Request(
                 new Columns.All(), new Condition.Equals("id", id)));
         if (entity != null) {
@@ -78,6 +113,7 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
     @POST
     public Response add(T entity) throws Exception {
         permissionsService.checkEdit(getUserId(), entity, true, false);
+        checkAccessPermission(getCreateAccessPermission());
 
         entity.setId(storage.addObject(entity, new Request(new Columns.Exclude("id"))));
         actionLogger.create(request, getUserId(), entity);
@@ -118,6 +154,7 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
         }
 
         permissionsService.checkEdit(getUserId(), entity, false, skipReadonly);
+        checkAccessPermission(getEditAccessPermission(entity));
 
         storage.updateObject(entity, new Request(
                 new Columns.Exclude("id"),
@@ -140,6 +177,7 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
     public Response remove(@PathParam("id") long id) throws Exception {
         permissionsService.checkPermission(baseClass, getUserId(), id);
         permissionsService.checkEdit(getUserId(), baseClass, false, false);
+        checkAccessPermission(getDeleteAccessPermission(id));
 
         storage.removeObject(baseClass, new Request(new Condition.Equals("id", id)));
         cacheManager.invalidateObject(true, baseClass, id, ObjectOperation.DELETE);

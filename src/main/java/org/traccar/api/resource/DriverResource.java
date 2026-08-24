@@ -24,6 +24,7 @@ import jakarta.ws.rs.core.MediaType;
 import java.util.List;
 
 import org.traccar.api.ExtendedObjectResource;
+import org.traccar.api.security.AccessPermissions;
 import org.traccar.model.Driver;
 
 @Path("drivers")
@@ -33,6 +34,26 @@ public class DriverResource extends ExtendedObjectResource<Driver> {
 
     public DriverResource() {
         super(Driver.class, "name", List.of("name", "uniqueId"));
+    }
+
+    @Override
+    protected String getViewAccessPermission() {
+        return AccessPermissions.DRIVER_VIEW;
+    }
+
+    @Override
+    protected String getCreateAccessPermission() {
+        return AccessPermissions.DRIVER_CREATE;
+    }
+
+    @Override
+    protected String getEditAccessPermission() {
+        return AccessPermissions.DRIVER_EDIT;
+    }
+
+    @Override
+    protected String getDeleteAccessPermission() {
+        return AccessPermissions.DRIVER_DELETE;
     }
 
 }

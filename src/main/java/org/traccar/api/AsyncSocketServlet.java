@@ -19,6 +19,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.eclipse.jetty.ee10.websocket.server.JettyWebSocketServlet;
 import org.eclipse.jetty.ee10.websocket.server.JettyWebSocketServletFactory;
 import org.traccar.api.security.LoginService;
+import org.traccar.api.security.AccessControlService;
 import org.traccar.config.Config;
 import org.traccar.config.Keys;
 import org.traccar.helper.SessionHelper;
@@ -43,16 +44,18 @@ public class AsyncSocketServlet extends JettyWebSocketServlet {
     private final ConnectionManager connectionManager;
     private final Storage storage;
     private final LoginService loginService;
+    private final AccessControlService accessControlService;
 
     @Inject
     public AsyncSocketServlet(
             Config config, ObjectMapper objectMapper, ConnectionManager connectionManager, Storage storage,
-            LoginService loginService) {
+            LoginService loginService, AccessControlService accessControlService) {
         this.config = config;
         this.objectMapper = objectMapper;
         this.connectionManager = connectionManager;
         this.storage = storage;
         this.loginService = loginService;
+        this.accessControlService = accessControlService;
     }
 
     @Override
@@ -72,7 +75,7 @@ public class AsyncSocketServlet extends JettyWebSocketServlet {
                 userId = (Long) ((HttpSession) req.getSession()).getAttribute(SessionHelper.USER_ID_KEY);
             }
             if (userId != null) {
-                return new AsyncSocket(objectMapper, connectionManager, storage, userId);
+                return new AsyncSocket(objectMapper, connectionManager, storage, accessControlService, userId);
             }
             return null;
         });

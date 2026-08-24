@@ -79,6 +79,8 @@ public class ExtendedObjectResource<T extends BaseModel> extends BaseObjectResou
             conditions.add(new Condition.Contains(searchColumns, keyword));
         }
 
+        checkAccessPermission(getViewAccessPermission());
+
         Columns columns = excludeAttributes ? new Columns.Exclude("attributes") : new Columns.All();
         Order order = new Order(sortField != null ? sortField : "id", false, limit, offset);
         return storage.getObjectsStream(baseClass, new Request(columns, Condition.merge(conditions), order));

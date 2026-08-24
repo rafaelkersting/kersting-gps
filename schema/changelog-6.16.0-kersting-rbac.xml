@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+  xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd"
+  logicalFilePath="changelog-6.16.0-kersting-rbac">
+
+  <changeSet author="kersting" id="kersting-rbac-device-appearance">
+    <createTable tableName="tc_access_profiles">
+      <column name="id" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" nullable="false" /></column>
+      <column name="name" type="VARCHAR(128)"><constraints nullable="false" unique="true" /></column>
+      <column name="description" type="VARCHAR(512)" />
+      <column name="disabled" type="BOOLEAN" defaultValueBoolean="false"><constraints nullable="false" /></column>
+    </createTable>
+    <createTable tableName="tc_access_profile_permissions">
+      <column name="profileid" type="BIGINT"><constraints nullable="false" /></column>
+      <column name="permissionkey" type="VARCHAR(128)"><constraints nullable="false" /></column>
+    </createTable>
+    <addPrimaryKey tableName="tc_access_profile_permissions" columnNames="profileid, permissionkey"
+                   constraintName="pk_access_profile_permissions" />
+    <addForeignKeyConstraint baseTableName="tc_access_profile_permissions" baseColumnNames="profileid"
+                             referencedTableName="tc_access_profiles" referencedColumnNames="id"
+                             constraintName="fk_access_profile_permissions_profile" onDelete="CASCADE" />
+    <createTable tableName="tc_user_access_profiles">
+      <column name="userid" type="BIGINT"><constraints nullable="false" /></column>
+      <column name="profileid" type="BIGINT"><constraints nullable="false" /></column>
+    </createTable>
+    <addPrimaryKey tableName="tc_user_access_profiles" columnNames="userid" constraintName="pk_user_access_profiles" />
+    <addForeignKeyConstraint baseTableName="tc_user_access_profiles" baseColumnNames="userid"
+                             referencedTableName="tc_users" referencedColumnNames="id"
+                             constraintName="fk_user_access_profiles_user" onDelete="CASCADE" />
+    <addForeignKeyConstraint baseTableName="tc_user_access_profiles" baseColumnNames="profileid"
+                             referencedTableName="tc_access_profiles" referencedColumnNames="id"
+                             constraintName="fk_user_access_profiles_profile" onDelete="CASCADE" />
+    <createTable tableName="tc_user_permission_overrides">
+      <column name="userid" type="BIGINT"><constraints nullable="false" /></column>
+      <column name="permissionkey" type="VARCHAR(128)"><constraints nullable="false" /></column>
+      <column name="effect" type="VARCHAR(8)"><constraints nullable="false" /></column>
+    </createTable>
+    <addPrimaryKey tableName="tc_user_permission_overrides" columnNames="userid, permissionkey"
+                   constraintName="pk_user_permission_overrides" />
+    <addForeignKeyConstraint baseTableName="tc_user_permission_overrides" baseColumnNames="userid"
+                             referencedTableName="tc_users" referencedColumnNames="id"
+                             constraintName="fk_user_permission_overrides_user" onDelete="CASCADE" />
+    <insert tableName="tc_access_profiles"><column name="name" value="Administrador" /><column name="description" value="Acesso administrativo" /></insert>
+    <insert tableName="tc_access_profiles"><column name="name" value="Gestor" /><column name="description" value="Gestão operacional" /></insert>
+    <insert tableName="tc_access_profiles"><column name="name" value="Cliente" /><column name="description" value="Acesso do cliente" /></insert>
+    <insert tableName="tc_access_profiles"><column name="name" value="Operador" /><column name="description" value="Operação diária" /></insert>
+    <insert tableName="tc_access_profiles"><column name="name" value="Somente Visualização" /><column name="description" value="Acesso somente para consulta" /></insert>
+    <insert tableName="tc_access_profiles"><column name="name" value="Personalizado" /><column name="description" value="Permissões definidas individualmente" /></insert>
+  </changeSet>
+</databaseChangeLog>

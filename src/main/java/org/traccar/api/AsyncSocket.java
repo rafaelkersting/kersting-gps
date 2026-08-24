@@ -23,6 +23,8 @@ import org.eclipse.jetty.websocket.api.Session;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.traccar.helper.model.PositionUtil;
+import org.traccar.api.security.AccessControlService;
+import org.traccar.api.security.AccessPermissions;
 import org.traccar.model.Device;
 import org.traccar.model.Event;
 import org.traccar.model.LogRecord;
@@ -49,15 +51,20 @@ public class AsyncSocket implements Session.Listener.AutoDemanding, ConnectionMa
     private final ObjectMapper objectMapper;
     private final ConnectionManager connectionManager;
     private final Storage storage;
+    private final AccessControlService accessControlService;
     private final long userId;
 
     private boolean includeLogs;
+    private boolean includeMapDevices;
     private Session session;
 
-    public AsyncSocket(ObjectMapper objectMapper, ConnectionManager connectionManager, Storage storage, long userId) {
+    public AsyncSocket(
+            ObjectMapper objectMapper, ConnectionManager connectionManager, Storage storage,
+            AccessControlService accessControlService, long userId) {
         this.objectMapper = objectMapper;
         this.connectionManager = connectionManager;
         this.storage = storage;
+        this.accessControlService = accessControlService;
         this.userId = userId;
     }
 
@@ -66,7 +73,10 @@ public class AsyncSocket implements Session.Listener.AutoDemanding, ConnectionMa
         this.session = session;
         try {
             Map<String, Collection<?>> data = new HashMap<>();
-            data.put(KEY_POSITIONS, PositionUtil.getLatestPositions(storage, userId));
+            includeMapDevices = accessControlService.hasPermission(userId, AccessPermissions.MAP_DEVICES);
+            if (includeMapDevices) {
+                data.put(KEY_POSITIONS, PositionUtil.getLatestPositions(storage, userId));
+            }
             sendData(data);
             connectionManager.addListener(userId, this);
         } catch (StorageException e) {
@@ -107,12 +117,16 @@ public class AsyncSocket implements Session.Listener.AutoDemanding, ConnectionMa
 
     @Override
     public void onUpdateDevice(Device device) {
-        sendData(Map.of(KEY_DEVICES, List.of(device)));
+        if (includeMapDevices) {
+            sendData(Map.of(KEY_DEVICES, List.of(device)));
+        }
     }
 
     @Override
     public void onUpdatePosition(Position position) {
-        sendData(Map.of(KEY_POSITIONS, List.of(position)));
+        if (includeMapDevices) {
+            sendData(Map.of(KEY_POSITIONS, List.of(position)));
+        }
     }
 
     @Override
