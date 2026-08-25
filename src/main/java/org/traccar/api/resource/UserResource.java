@@ -21,6 +21,7 @@ import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.core.Context;
 import org.traccar.api.BaseObjectResource;
+import org.traccar.api.security.AccessPermissions;
 import org.traccar.command.SystemCommandService;
 import org.traccar.config.Config;
 import org.traccar.config.Keys;
@@ -74,12 +75,28 @@ public class UserResource extends BaseObjectResource<User> {
         super(User.class);
     }
 
+    @Override
+    protected String getViewAccessPermission(long id) {
+        return id == getUserId() ? AccessPermissions.PREFERENCE_VIEW : AccessPermissions.USER_VIEW;
+    }
+
+    @Override
+    protected String getEditAccessPermission(User entity) {
+        return entity.getId() == getUserId() ? AccessPermissions.PREFERENCE_EDIT : AccessPermissions.USER_EDIT;
+    }
+
+    @Override
+    protected String getDeleteAccessPermission(long id) {
+        return AccessPermissions.USER_DELETE;
+    }
+
     @GET
     public Stream<User> get(
             @QueryParam("userId") long userId, @QueryParam("deviceId") long deviceId,
             @QueryParam("excludeAttributes") boolean excludeAttributes,
             @QueryParam("limit") int limit, @QueryParam("offset") int offset,
             @QueryParam("keyword") String keyword) throws StorageException {
+        accessControlService.checkPermission(getUserId(), AccessPermissions.USER_VIEW);
         var conditions = new LinkedList<Condition>();
         if (userId > 0) {
             permissionsService.checkUser(getUserId(), userId);
@@ -105,6 +122,9 @@ public class UserResource extends BaseObjectResource<User> {
     @POST
     public Response add(User entity) throws StorageException {
         User currentUser = getUserId() > 0 ? permissionsService.getUser(getUserId()) : null;
+        if (currentUser != null) {
+            accessControlService.checkPermission(getUserId(), AccessPermissions.USER_CREATE);
+        }
         if (currentUser == null || !currentUser.getAdministrator()) {
             permissionsService.checkUserUpdate(getUserId(), new User(), entity);
             if (currentUser != null && currentUser.getUserLimit() != 0) {

@@ -18,6 +18,7 @@ package org.traccar.api.resource;
 import java.util.List;
 
 import org.traccar.api.SimpleObjectResource;
+import org.traccar.api.security.AccessPermissions;
 import org.traccar.model.Group;
 
 import jakarta.ws.rs.Consumes;
@@ -32,6 +33,26 @@ public class GroupResource extends SimpleObjectResource<Group> {
 
     public GroupResource() {
         super(Group.class, "name", List.of("name"));
+    }
+
+    @Override
+    protected String getViewAccessPermission() {
+        return AccessPermissions.GROUP_VIEW;
+    }
+
+    @Override
+    protected String getCreateAccessPermission() {
+        return AccessPermissions.GROUP_CREATE;
+    }
+
+    @Override
+    protected String getEditAccessPermission() {
+        return AccessPermissions.GROUP_EDIT;
+    }
+
+    @Override
+    protected String getDeleteAccessPermission() {
+        return AccessPermissions.GROUP_DELETE;
     }
 
 }

@@ -28,6 +28,7 @@ import jakarta.ws.rs.core.Response;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.traccar.api.ExtendedObjectResource;
+import org.traccar.api.security.AccessPermissions;
 import org.traccar.model.Event;
 import org.traccar.model.ManagedUser;
 import org.traccar.model.Notification;
@@ -64,9 +65,30 @@ public class NotificationResource extends ExtendedObjectResource<Notification> {
         super(Notification.class, "description", List.of("description"));
     }
 
+    @Override
+    protected String getViewAccessPermission() {
+        return AccessPermissions.NOTIFICATION_VIEW;
+    }
+
+    @Override
+    protected String getCreateAccessPermission() {
+        return AccessPermissions.NOTIFICATION_CREATE;
+    }
+
+    @Override
+    protected String getEditAccessPermission() {
+        return AccessPermissions.NOTIFICATION_EDIT;
+    }
+
+    @Override
+    protected String getDeleteAccessPermission() {
+        return AccessPermissions.NOTIFICATION_DELETE;
+    }
+
     @GET
     @Path("types")
     public Collection<Typed> get() {
+        checkAccessPermissionUnchecked(AccessPermissions.NOTIFICATION_VIEW);
         List<Typed> types = new LinkedList<>();
         Field[] fields = Event.class.getDeclaredFields();
         for (Field field : fields) {
@@ -84,6 +106,8 @@ public class NotificationResource extends ExtendedObjectResource<Notification> {
     @GET
     @Path("notificators")
     public Collection<Typed> getNotificators(@QueryParam("announcement") boolean announcement) {
+        checkAccessPermissionUnchecked(announcement
+                ? AccessPermissions.ANNOUNCEMENT_VIEW : AccessPermissions.NOTIFICATION_VIEW);
         Set<String> announcementsUnsupported = Set.of("command", "web");
         return notificatorManager.getAllNotificatorTypes().stream()
                 .filter(typed -> !announcement || !announcementsUnsupported.contains(typed.type()))
@@ -93,6 +117,7 @@ public class NotificationResource extends ExtendedObjectResource<Notification> {
     @POST
     @Path("test")
     public Response testMessage() throws MessageException, StorageException {
+        checkAccessPermission(AccessPermissions.NOTIFICATION_EDIT);
         User user = permissionsService.getUser(getUserId());
         for (Typed method : notificatorManager.getAllNotificatorTypes()) {
             notificatorManager.getNotificator(method.type()).send(null, user, new Event("test", 0), null);
@@ -104,6 +129,7 @@ public class NotificationResource extends ExtendedObjectResource<Notification> {
     @Path("test/{notificator}")
     public Response testMessage(@PathParam("notificator") String notificator)
             throws MessageException, StorageException {
+        checkAccessPermission(AccessPermissions.NOTIFICATION_EDIT);
         User user = permissionsService.getUser(getUserId());
         notificatorManager.getNotificator(notificator).send(null, user, new Event("test", 0), null);
         return Response.noContent().build();
@@ -113,7 +139,10 @@ public class NotificationResource extends ExtendedObjectResource<Notification> {
     @Path("send/{notificator}")
     public Response sendMessage(
             @PathParam("notificator") String notificator, @QueryParam("userId") List<Long> userIds,
+            @QueryParam("announcement") boolean announcement,
             NotificationMessage message) throws MessageException, StorageException {
+        checkAccessPermission(announcement
+                ? AccessPermissions.ANNOUNCEMENT_MANAGE : AccessPermissions.NOTIFICATION_EDIT);
         permissionsService.checkManager(getUserId());
         List<User> users;
         if (userIds.isEmpty()) {
@@ -142,6 +171,14 @@ public class NotificationResource extends ExtendedObjectResource<Notification> {
             }
         }
         return Response.noContent().build();
+    }
+
+    private void checkAccessPermissionUnchecked(String permission) {
+        try {
+            checkAccessPermission(permission);
+        } catch (StorageException error) {
+            throw new IllegalStateException(error);
+        }
     }
 
 }

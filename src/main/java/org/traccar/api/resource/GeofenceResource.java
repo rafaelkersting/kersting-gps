@@ -18,6 +18,7 @@ package org.traccar.api.resource;
 import java.util.List;
 
 import org.traccar.api.ExtendedObjectResource;
+import org.traccar.api.security.AccessPermissions;
 import org.traccar.model.Geofence;
 
 import jakarta.ws.rs.Consumes;
@@ -32,6 +33,26 @@ public class GeofenceResource extends ExtendedObjectResource<Geofence> {
 
     public GeofenceResource() {
         super(Geofence.class, "name", List.of("name"));
+    }
+
+    @Override
+    protected String getViewAccessPermission() {
+        return AccessPermissions.GEOFENCE_VIEW;
+    }
+
+    @Override
+    protected String getCreateAccessPermission() {
+        return AccessPermissions.GEOFENCE_CREATE;
+    }
+
+    @Override
+    protected String getEditAccessPermission() {
+        return AccessPermissions.GEOFENCE_EDIT;
+    }
+
+    @Override
+    protected String getDeleteAccessPermission() {
+        return AccessPermissions.GEOFENCE_DELETE;
     }
 
 }

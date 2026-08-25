@@ -24,6 +24,7 @@ import jakarta.ws.rs.core.MediaType;
 import java.util.List;
 
 import org.traccar.api.ExtendedObjectResource;
+import org.traccar.api.security.AccessPermissions;
 import org.traccar.model.Maintenance;
 
 @Path("maintenance")
@@ -33,6 +34,26 @@ public class MaintenanceResource extends ExtendedObjectResource<Maintenance> {
 
     public MaintenanceResource() {
         super(Maintenance.class, "name", List.of("name"));
+    }
+
+    @Override
+    protected String getViewAccessPermission() {
+        return AccessPermissions.MAINTENANCE_VIEW;
+    }
+
+    @Override
+    protected String getCreateAccessPermission() {
+        return AccessPermissions.MAINTENANCE_CREATE;
+    }
+
+    @Override
+    protected String getEditAccessPermission() {
+        return AccessPermissions.MAINTENANCE_EDIT;
+    }
+
+    @Override
+    protected String getDeleteAccessPermission() {
+        return AccessPermissions.MAINTENANCE_DELETE;
     }
 
 }

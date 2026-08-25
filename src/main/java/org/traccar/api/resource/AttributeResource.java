@@ -31,6 +31,7 @@ import jakarta.ws.rs.core.Response;
 import java.util.List;
 
 import org.traccar.api.ExtendedObjectResource;
+import org.traccar.api.security.AccessPermissions;
 import org.traccar.model.Attribute;
 import org.traccar.model.Device;
 import org.traccar.model.Position;
@@ -55,10 +56,31 @@ public class AttributeResource extends ExtendedObjectResource<Attribute> {
         super(Attribute.class, "description", List.of("description"));
     }
 
+    @Override
+    protected String getViewAccessPermission() {
+        return AccessPermissions.ATTRIBUTE_VIEW;
+    }
+
+    @Override
+    protected String getCreateAccessPermission() {
+        return AccessPermissions.ATTRIBUTE_CREATE;
+    }
+
+    @Override
+    protected String getEditAccessPermission() {
+        return AccessPermissions.ATTRIBUTE_EDIT;
+    }
+
+    @Override
+    protected String getDeleteAccessPermission() {
+        return AccessPermissions.ATTRIBUTE_DELETE;
+    }
+
     @POST
     @Path("test")
     public Response test(@QueryParam("deviceId") long deviceId, Attribute entity) throws Exception {
         permissionsService.checkAdmin(getUserId());
+        checkAccessPermission(AccessPermissions.ATTRIBUTE_EDIT);
         permissionsService.checkPermission(Device.class, getUserId(), deviceId);
 
         Position position = storage.getObject(Position.class, new Request(

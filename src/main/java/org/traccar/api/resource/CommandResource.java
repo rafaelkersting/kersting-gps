@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import org.traccar.BaseProtocol;
 import org.traccar.ServerManager;
 import org.traccar.api.ExtendedObjectResource;
+import org.traccar.api.security.AccessPermissions;
 import org.traccar.command.CommandSender;
 import org.traccar.command.CommandSenderManager;
 import org.traccar.command.SystemCommandService;
@@ -93,6 +94,26 @@ public class CommandResource extends ExtendedObjectResource<Command> {
         super(Command.class, "description", List.of("description"));
     }
 
+    @Override
+    protected String getViewAccessPermission() {
+        return AccessPermissions.COMMAND_VIEW;
+    }
+
+    @Override
+    protected String getCreateAccessPermission() {
+        return AccessPermissions.COMMAND_CREATE;
+    }
+
+    @Override
+    protected String getEditAccessPermission() {
+        return AccessPermissions.COMMAND_EDIT;
+    }
+
+    @Override
+    protected String getDeleteAccessPermission() {
+        return AccessPermissions.COMMAND_DELETE;
+    }
+
     private BaseProtocol getDeviceProtocol(long deviceId) throws StorageException {
         Position position = storage.getObject(Position.class, new Request(
                 new Columns.All(), new Condition.LatestPositions(deviceId)));
@@ -114,6 +135,7 @@ public class CommandResource extends ExtendedObjectResource<Command> {
     @GET
     @Path("send")
     public Collection<Command> get(@QueryParam("deviceId") long deviceId) throws StorageException {
+        checkAccessPermission(AccessPermissions.COMMAND_VIEW);
         permissionsService.checkPermission(Device.class, getUserId(), deviceId);
         BaseProtocol protocol = getDeviceProtocol(deviceId);
 
@@ -141,6 +163,7 @@ public class CommandResource extends ExtendedObjectResource<Command> {
     public Response send(
             Command entity, @QueryParam("groupId") long groupId,
             @QueryParam("confirmed") boolean confirmed) throws Exception {
+        checkAccessPermission(AccessPermissions.COMMAND_SEND);
         if (entity.getId() > 0) {
             permissionsService.checkPermission(baseClass, getUserId(), entity.getId());
             long deviceId = entity.getDeviceId();
@@ -158,6 +181,11 @@ public class CommandResource extends ExtendedObjectResource<Command> {
             if (Command.TYPE_ENGINE_STOP.equals(entity.getType()) && groupId == 0) {
                 ensureVehicleStopped(entity.getDeviceId());
             }
+        }
+        if (Command.TYPE_ENGINE_STOP.equals(entity.getType())) {
+            checkAccessPermission(AccessPermissions.COMMAND_LOCK);
+        } else if (Command.TYPE_ENGINE_RESUME.equals(entity.getType())) {
+            checkAccessPermission(AccessPermissions.COMMAND_UNLOCK);
         }
 
         if (groupId > 0) {

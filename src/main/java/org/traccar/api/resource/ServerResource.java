@@ -18,6 +18,7 @@ package org.traccar.api.resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.core.Context;
 import org.traccar.api.BaseResource;
+import org.traccar.api.security.AccessPermissions;
 import org.traccar.model.ObjectOperation;
 import org.traccar.config.Config;
 import org.traccar.config.Keys;
@@ -114,6 +115,7 @@ public class ServerResource extends BaseResource {
     @PUT
     public Response update(Server server) throws Exception {
         permissionsService.checkAdmin(getUserId());
+        accessControlService.checkPermission(getUserId(), AccessPermissions.SERVER_MANAGE);
         storage.updateObject(server, new Request(
                 new Columns.Exclude("id"),
                 new Condition.Equals("id", server.getId())));
@@ -142,6 +144,7 @@ public class ServerResource extends BaseResource {
     @POST
     @Consumes("*/*")
     public Response uploadFile(@PathParam("path") String path, File inputFile) throws IOException, StorageException {
+        accessControlService.checkPermission(getUserId(), AccessPermissions.SERVER_MANAGE);
         permissionsService.checkAdmin(getUserId());
         String root = config.getString(Keys.WEB_OVERRIDE, config.getString(Keys.WEB_PATH));
 
@@ -165,6 +168,7 @@ public class ServerResource extends BaseResource {
     @Path("gc")
     @GET
     public Response gc() throws StorageException {
+        accessControlService.checkPermission(getUserId(), AccessPermissions.SERVER_MANAGE);
         permissionsService.checkAdmin(getUserId());
         System.gc();
         return Response.ok().build();

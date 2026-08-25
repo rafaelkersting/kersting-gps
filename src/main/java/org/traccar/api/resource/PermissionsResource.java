@@ -20,6 +20,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.UriInfo;
 import org.traccar.api.BaseResource;
+import org.traccar.api.security.AccessPermissions;
 import org.traccar.command.SystemCommandService;
 import org.traccar.helper.LogAction;
 import org.traccar.model.BaseModel;
@@ -68,6 +69,11 @@ public class PermissionsResource  extends BaseResource {
     private HttpServletRequest request;
 
     private void checkPermission(Permission permission) throws StorageException {
+        if (permission.getOwnerClass().equals(User.class)
+                && (permission.getPropertyClass().equals(Device.class)
+                || permission.getPropertyClass().equals(Group.class))) {
+            accessControlService.checkPermission(getUserId(), AccessPermissions.USER_LINK_SCOPE);
+        }
         if (permissionsService.notAdmin(getUserId())) {
             long commandId = permission.getOwnerClass().equals(Command.class) ? permission.getOwnerId()
                     : permission.getPropertyClass().equals(Command.class) ? permission.getPropertyId() : 0;

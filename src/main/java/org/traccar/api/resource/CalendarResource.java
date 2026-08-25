@@ -24,6 +24,7 @@ import jakarta.ws.rs.core.MediaType;
 import java.util.List;
 
 import org.traccar.api.SimpleObjectResource;
+import org.traccar.api.security.AccessPermissions;
 import org.traccar.model.Calendar;
 
 @Path("calendars")
@@ -33,6 +34,26 @@ public class CalendarResource extends SimpleObjectResource<Calendar> {
 
     public CalendarResource() {
         super(Calendar.class, "name", List.of("name"));
+    }
+
+    @Override
+    protected String getViewAccessPermission() {
+        return AccessPermissions.CALENDAR_VIEW;
+    }
+
+    @Override
+    protected String getCreateAccessPermission() {
+        return AccessPermissions.CALENDAR_CREATE;
+    }
+
+    @Override
+    protected String getEditAccessPermission() {
+        return AccessPermissions.CALENDAR_EDIT;
+    }
+
+    @Override
+    protected String getDeleteAccessPermission() {
+        return AccessPermissions.CALENDAR_DELETE;
     }
 
 }

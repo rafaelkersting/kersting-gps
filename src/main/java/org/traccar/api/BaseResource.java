@@ -16,6 +16,7 @@
 package org.traccar.api;
 
 import org.traccar.api.security.PermissionsService;
+import org.traccar.api.security.AccessControlService;
 import org.traccar.api.security.UserPrincipal;
 import org.traccar.storage.Storage;
 
@@ -33,6 +34,9 @@ public class BaseResource {
 
     @Inject
     protected PermissionsService permissionsService;
+
+    @Inject
+    protected AccessControlService accessControlService;
 
     protected long getUserId() {
         UserPrincipal principal = (UserPrincipal) securityContext.getUserPrincipal();

@@ -18,9 +18,12 @@ package org.traccar.api.resource;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.ws.rs.core.Context;
 import org.traccar.api.BaseObjectResource;
+import org.traccar.api.security.AccessPermissions;
 import org.traccar.database.MediaManager;
 import org.traccar.helper.LogAction;
 import org.traccar.model.Device;
+import org.traccar.model.DeviceAppearance;
+import org.traccar.model.ObjectOperation;
 import org.traccar.model.DeviceAccumulators;
 import org.traccar.model.LinkedDevice;
 import org.traccar.model.Position;
@@ -83,6 +86,26 @@ public class DeviceResource extends BaseObjectResource<Device> {
         super(Device.class);
     }
 
+    @Override
+    protected String getViewAccessPermission() {
+        return AccessPermissions.DEVICE_VIEW;
+    }
+
+    @Override
+    protected String getCreateAccessPermission() {
+        return AccessPermissions.DEVICE_CREATE;
+    }
+
+    @Override
+    protected String getEditAccessPermission() {
+        return AccessPermissions.DEVICE_EDIT;
+    }
+
+    @Override
+    protected String getDeleteAccessPermission() {
+        return AccessPermissions.DEVICE_DELETE;
+    }
+
     @GET
     public Stream<Device> get(
             @QueryParam("all") boolean all, @QueryParam("userId") long userId,
@@ -92,6 +115,8 @@ public class DeviceResource extends BaseObjectResource<Device> {
             @QueryParam("excludeAttributes") boolean excludeAttributes,
             @QueryParam("limit") int limit, @QueryParam("offset") int offset,
             @QueryParam("keyword") String keyword) throws StorageException {
+
+        checkAccessPermission(AccessPermissions.DEVICE_VIEW);
 
         Columns columns = excludeAttributes ? new Columns.Exclude("attributes") : new Columns.All();
 
@@ -148,11 +173,24 @@ public class DeviceResource extends BaseObjectResource<Device> {
         }
     }
 
+    @Override
+    @Path("{id}")
+    @PUT
+    public Response update(Device entity) throws Exception {
+        Device current = storage.getObject(Device.class, new Request(
+                new Columns.Include("groupId"), new Condition.Equals("id", entity.getId())));
+        if (current != null && current.getGroupId() != entity.getGroupId()) {
+            checkAccessPermission(AccessPermissions.DEVICE_CHANGE_GROUP);
+        }
+        return super.update(entity);
+    }
+
     @Path("{id}/accumulators")
     @PUT
     public Response updateAccumulators(DeviceAccumulators entity) throws Exception {
         permissionsService.checkPermission(Device.class, getUserId(), entity.getDeviceId());
         permissionsService.checkEdit(getUserId(), Device.class, false, false);
+        checkAccessPermission(AccessPermissions.DEVICE_EDIT);
 
         Position position = storage.getObject(Position.class, new Request(
                 new Columns.All(), new Condition.LatestPositions(entity.getDeviceId())));
@@ -205,9 +243,13 @@ public class DeviceResource extends BaseObjectResource<Device> {
     }
 
     private Response uploadImageFile(
-            long deviceId, File file, String type, String name, boolean allowGif)
+            long deviceId, File file, String type, String name, boolean allowGif, String permission)
             throws StorageException, IOException {
-        permissionsService.checkEdit(getUserId(), Device.class, false, false);
+        checkAppearanceWrite(deviceId, permission);
+        if ("marker".equals(name)
+                && !accessControlService.getEffectiveAccess(getUserId()).legacy()) {
+            accessControlService.checkPermission(getUserId(), AccessPermissions.MAP_MARKER);
+        }
 
         Device device = storage.getObject(Device.class, new Request(
                 new Columns.All(),
@@ -242,7 +284,12 @@ public class DeviceResource extends BaseObjectResource<Device> {
 
     private Response deleteImageFiles(long deviceId, String name, boolean allowGif)
             throws StorageException, IOException {
-        permissionsService.checkEdit(getUserId(), Device.class, false, false);
+        String permission = name.equals("device") ? AccessPermissions.CARD_IMAGE : AccessPermissions.CUSTOM_UPLOAD;
+        checkAppearanceWrite(deviceId, permission);
+        if ("marker".equals(name)
+                && !accessControlService.getEffectiveAccess(getUserId()).legacy()) {
+            accessControlService.checkPermission(getUserId(), AccessPermissions.MAP_MARKER);
+        }
 
         Device device = storage.getObject(Device.class, new Request(
                 new Columns.All(),
@@ -266,7 +313,7 @@ public class DeviceResource extends BaseObjectResource<Device> {
     public Response uploadImage(
             @PathParam("id") long deviceId, File file,
             @HeaderParam(HttpHeaders.CONTENT_TYPE) String type) throws StorageException, IOException {
-        return uploadImageFile(deviceId, file, type, "device", true);
+        return uploadImageFile(deviceId, file, type, "device", true, AccessPermissions.CARD_IMAGE);
     }
 
     @Path("{id}/image")
@@ -281,13 +328,99 @@ public class DeviceResource extends BaseObjectResource<Device> {
     public Response uploadMarker(
             @PathParam("id") long deviceId, File file,
             @HeaderParam(HttpHeaders.CONTENT_TYPE) String type) throws StorageException, IOException {
-        return uploadImageFile(deviceId, file, type, "marker", false);
+        return uploadImageFile(deviceId, file, type, "marker", false, AccessPermissions.CUSTOM_UPLOAD);
     }
 
     @Path("{id}/marker")
     @DELETE
     public Response deleteMarker(@PathParam("id") long deviceId) throws StorageException, IOException {
         return deleteImageFiles(deviceId, "marker", false);
+    }
+
+    private void checkAppearanceWrite(long deviceId, String permission) throws StorageException {
+        permissionsService.checkPermission(Device.class, getUserId(), deviceId);
+        var effectiveAccess = accessControlService.getEffectiveAccess(getUserId());
+        if (effectiveAccess.legacy()) {
+            permissionsService.checkEdit(getUserId(), Device.class, false, false);
+            return;
+        }
+        if (!permissionsService.getUser(getUserId()).getAdministrator()
+                && (permissionsService.getServer().getReadonly()
+                || permissionsService.getServer().getDeviceReadonly()
+                || permissionsService.getUser(getUserId()).getReadonly())) {
+            throw new SecurityException("Write access denied");
+        }
+        accessControlService.checkPermission(getUserId(), AccessPermissions.APPEARANCE_VIEW);
+        accessControlService.checkPermission(getUserId(), permission);
+    }
+
+    @Path("{id}/appearance")
+    @GET
+    public DeviceAppearance getAppearance(@PathParam("id") long deviceId) throws StorageException {
+        permissionsService.checkPermission(Device.class, getUserId(), deviceId);
+        accessControlService.checkPermission(getUserId(), AccessPermissions.APPEARANCE_VIEW);
+        Device device = storage.getObject(Device.class, new Request(
+                new Columns.Include("attributes"), new Condition.Equals("id", deviceId)));
+        if (device == null) {
+            throw new IllegalArgumentException("Device not found");
+        }
+        DeviceAppearance appearance = new DeviceAppearance();
+        appearance.setCardImage((String) device.getAttributes().get("deviceImage"));
+        appearance.setMapMarker((String) device.getAttributes().get("mapMarker"));
+        appearance.setMarker3d((String) device.getAttributes().get("mapMarker3d"));
+        appearance.setMarkerCategory((String) device.getAttributes().get("mapMarker3dCategory"));
+        appearance.setMarkerModel((String) device.getAttributes().get("mapMarker3dModel"));
+        appearance.setMarkerColor((String) device.getAttributes().get("mapMarker3dColor"));
+        return appearance;
+    }
+
+    @Path("{id}/appearance")
+    @PUT
+    public DeviceAppearance updateAppearance(
+            @PathParam("id") long deviceId, DeviceAppearance appearance) throws Exception {
+        checkAppearanceWrite(deviceId, AccessPermissions.APPEARANCE_VIEW);
+        Device device = storage.getObject(Device.class, new Request(
+                new Columns.Include("id", "attributes"), new Condition.Equals("id", deviceId)));
+        if (device == null) {
+            throw new IllegalArgumentException("Device not found");
+        }
+        checkAppearanceChange(device, "deviceImage", appearance.getCardImage(), AccessPermissions.CARD_IMAGE);
+        checkAppearanceChange(device, "mapMarker", appearance.getMapMarker(), AccessPermissions.MAP_MARKER);
+        checkAppearanceChange(device, "mapMarker3d", appearance.getMarker3d(), AccessPermissions.MARKER_3D);
+        checkAppearanceChange(
+                device, "mapMarker3dCategory", appearance.getMarkerCategory(), AccessPermissions.MARKER_MODEL);
+        checkAppearanceChange(
+                device, "mapMarker3dModel", appearance.getMarkerModel(), AccessPermissions.MARKER_MODEL);
+        checkAppearanceChange(
+                device, "mapMarker3dColor", appearance.getMarkerColor(), AccessPermissions.MARKER_COLOR);
+        updateAppearanceAttribute(device, "deviceImage", appearance.getCardImage());
+        updateAppearanceAttribute(device, "mapMarker", appearance.getMapMarker());
+        updateAppearanceAttribute(device, "mapMarker3d", appearance.getMarker3d());
+        updateAppearanceAttribute(device, "mapMarker3dCategory", appearance.getMarkerCategory());
+        updateAppearanceAttribute(device, "mapMarker3dModel", appearance.getMarkerModel());
+        updateAppearanceAttribute(device, "mapMarker3dColor", appearance.getMarkerColor());
+        storage.updateObject(device, new Request(
+                new Columns.Include("attributes"), new Condition.Equals("id", deviceId)));
+        cacheManager.invalidateObject(true, Device.class, deviceId, ObjectOperation.UPDATE);
+        actionLogger.edit(request, getUserId(), device);
+        return appearance;
+    }
+
+    private void updateAppearanceAttribute(Device device, String key, String value) {
+        if (value != null && !value.isBlank()) {
+            device.getAttributes().put(key, value);
+        } else {
+            device.getAttributes().remove(key);
+        }
+    }
+
+    private void checkAppearanceChange(Device device, String key, String value, String permission)
+            throws StorageException {
+        Object currentValue = device.getAttributes().get(key);
+        String normalizedValue = value != null && !value.isBlank() ? value : null;
+        if (!java.util.Objects.equals(currentValue, normalizedValue)) {
+            accessControlService.checkPermission(getUserId(), permission);
+        }
     }
 
 }
