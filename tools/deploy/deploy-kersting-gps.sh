@@ -12,6 +12,7 @@ readonly PUBLIC_URL="https://gps.kersting.net.br/"
 readonly INFO_FILE="$RUNTIME_DIR/.kersting-deploy-info"
 readonly LOG_FILE="/var/log/kersting-gps-deploy.log"
 readonly LOCK_FILE="/run/lock/kersting-gps-deploy.lock"
+readonly DATABASE_NAME="gps_kersting"
 
 deploy_type="${1:-}"
 artifact_name="${2:-}"
@@ -20,6 +21,7 @@ expected_sha256="${4:-}"
 artifact_path=""
 work_dir=""
 backup_file=""
+database_backup_file=""
 runtime_modified=0
 
 log() {
@@ -58,7 +60,9 @@ validate_runtime() {
   local phase="$1"
   local internal_html="$work_dir/internal-${phase}.html"
   local public_html="$work_dir/public-${phase}.html"
-  local service_state restart_count
+  local service_state restart_count_before restart_count_after
+
+  restart_count_before="$(systemctl show "$SERVICE_NAME" -p NRestarts --value)"
 
   systemctl is-active --quiet "$SERVICE_NAME" || {
     systemctl status "$SERVICE_NAME" --no-pager || true
@@ -88,9 +92,9 @@ validate_runtime() {
   printf '%s\n' "$service_state"
   grep -qx 'ActiveState=active' <<< "$service_state" || return 1
   grep -qx 'SubState=running' <<< "$service_state" || return 1
-  restart_count="$(awk -F= '$1 == "NRestarts" {print $2}' <<< "$service_state")"
-  [[ "$restart_count" == "0" ]] || {
-    log "NRestarts deveria ser 0, mas é ${restart_count:-desconhecido}."
+  restart_count_after="$(awk -F= '$1 == "NRestarts" {print $2}' <<< "$service_state")"
+  [[ "$restart_count_after" == "$restart_count_before" ]] || {
+    log "NRestarts aumentou durante a validação: ${restart_count_before:-desconhecido} -> ${restart_count_after:-desconhecido}."
     return 1
   }
 
@@ -110,7 +114,7 @@ restore_backup() {
     tar -C "$RUNTIME_DIR" -xzf "$backup_file" || rollback_failed=1
   else
     rm -f "$RUNTIME_DIR/tracker-server.jar"
-    rm -rf "$RUNTIME_DIR/lib" "$RUNTIME_DIR/web"
+    rm -rf "$RUNTIME_DIR/lib" "$RUNTIME_DIR/web" "$RUNTIME_DIR/schema"
     rm -f "$INFO_FILE"
     rollback_dir="$work_dir/rollback-runtime"
     mkdir -p "$rollback_dir"
@@ -120,12 +124,21 @@ restore_backup() {
         "$RUNTIME_DIR/tracker-server.jar" || rollback_failed=1
       cp -a "$rollback_dir/traccar/lib" "$RUNTIME_DIR/lib" || rollback_failed=1
       cp -a "$rollback_dir/traccar/web" "$RUNTIME_DIR/web" || rollback_failed=1
+      cp -a "$rollback_dir/traccar/schema" "$RUNTIME_DIR/schema" || rollback_failed=1
       if [[ -f "$rollback_dir/traccar/.kersting-deploy-info" ]]; then
         install -o root -g root -m 0644 "$rollback_dir/traccar/.kersting-deploy-info" \
           "$INFO_FILE" || rollback_failed=1
       fi
-      chown -R root:root "$RUNTIME_DIR/lib" "$RUNTIME_DIR/web" || rollback_failed=1
+      chown -R root:root "$RUNTIME_DIR/lib" "$RUNTIME_DIR/web" "$RUNTIME_DIR/schema" || rollback_failed=1
     else
+      rollback_failed=1
+    fi
+
+    if [[ -n "$database_backup_file" && -f "$database_backup_file" ]]; then
+      log "Restaurando banco de dados a partir de $database_backup_file"
+      gunzip -c "$database_backup_file" | mysql --protocol=SOCKET -u root || rollback_failed=1
+    else
+      log "Backup do banco de dados não foi encontrado para rollback."
       rollback_failed=1
     fi
   fi
@@ -176,6 +189,12 @@ for required in awk curl date find flock grep install realpath sha256sum systemc
   require_command "$required"
 done
 
+if [[ "$deploy_type" == "completo" ]]; then
+  for required in gzip gunzip mysql mysqldump; do
+    require_command "$required"
+  done
+fi
+
 touch "$LOG_FILE"
 chown root:deploy "$LOG_FILE"
 chmod 0640 "$LOG_FILE"
@@ -214,6 +233,11 @@ if [[ "$deploy_type" == "completo" ]]; then
   [[ -s "$work_dir/tracker-server.jar" ]] || fail "Pacote completo sem tracker-server.jar."
   [[ -d "$work_dir/lib" && -n "$(find "$work_dir/lib" -mindepth 1 -maxdepth 1 -print -quit)" ]] || \
     fail "Pacote completo sem bibliotecas."
+  [[ -s "$work_dir/schema/changelog-master.xml" ]] || \
+    fail "Pacote completo sem schema/changelog-master.xml."
+  while IFS= read -r include_file; do
+    [[ -s "$work_dir/schema/$include_file" ]] || fail "Migration ausente no pacote: $include_file"
+  done < <(sed -nE 's#.*<include file="([^"]+)".*#\1#p' "$work_dir/schema/changelog-master.xml")
 fi
 
 timestamp="$(date +%Y-%m-%d-%H%M%S)"
@@ -229,10 +253,22 @@ else
   backup_file="$BACKUP_DIR/traccar-antes-${short_commit}-${timestamp}.tar.gz"
   log "Criando backup completo do runtime em $backup_file"
   tar -C "$(dirname "$RUNTIME_DIR")" -czf "$backup_file" "$(basename "$RUNTIME_DIR")"
+
+  database_backup_file="$BACKUP_DIR/database-antes-${short_commit}-${timestamp}.sql.gz"
+  log "Criando backup completo do banco em $database_backup_file"
+  mysqldump --protocol=SOCKET -u root --single-transaction --routines --events --triggers \
+    --hex-blob --default-character-set=utf8mb4 --add-drop-database --databases "$DATABASE_NAME" | \
+    gzip -9 > "$database_backup_file"
+  gzip -t "$database_backup_file"
+  [[ -s "$database_backup_file" ]] || fail "O backup do banco ficou vazio."
 fi
 
 chown root:deploy "$backup_file"
 chmod 0640 "$backup_file"
+if [[ -n "$database_backup_file" ]]; then
+  chown root:deploy "$database_backup_file"
+  chmod 0640 "$database_backup_file"
+fi
 
 runtime_modified=1
 if [[ "$deploy_type" == "frontend" ]]; then
@@ -242,15 +278,16 @@ if [[ "$deploy_type" == "frontend" ]]; then
   install -o root -g root -m 0644 "$work_dir/deploy-info" "$INFO_FILE"
   systemctl restart "$SERVICE_NAME"
 else
-  log "Publicando backend, bibliotecas e frontend."
+  log "Publicando backend, bibliotecas, schema e frontend."
   systemctl stop "$SERVICE_NAME"
   install -o root -g root -m 0644 "$work_dir/tracker-server.jar" \
     "$RUNTIME_DIR/tracker-server.jar.new"
   mv -f "$RUNTIME_DIR/tracker-server.jar.new" "$RUNTIME_DIR/tracker-server.jar"
-  rm -rf "$RUNTIME_DIR/lib"
+  rm -rf "$RUNTIME_DIR/lib" "$RUNTIME_DIR/schema"
   cp -a "$work_dir/lib" "$RUNTIME_DIR/lib"
+  cp -a "$work_dir/schema" "$RUNTIME_DIR/schema"
   cp -a "$work_dir/web/." "$RUNTIME_DIR/web/"
-  chown -R root:root "$RUNTIME_DIR/lib" "$RUNTIME_DIR/web"
+  chown -R root:root "$RUNTIME_DIR/lib" "$RUNTIME_DIR/schema" "$RUNTIME_DIR/web"
   install -o root -g root -m 0644 "$work_dir/deploy-info" "$INFO_FILE"
   systemctl start "$SERVICE_NAME"
 fi
@@ -259,3 +296,6 @@ validate_runtime "após deploy"
 runtime_modified=0
 log "Publicação $deploy_type concluída com sucesso. Commit instalado: $commit"
 log "Backup preservado: $backup_file"
+if [[ -n "$database_backup_file" ]]; then
+  log "Backup do banco preservado: $database_backup_file"
+fi
