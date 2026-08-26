@@ -147,6 +147,37 @@ jobs:
             exit 1
           }
 
+      - name: Validar migrations do schema
+        if: env.DEPLOY_TYPE == 'completo'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          schema_dir = Path('schema').resolve()
+          master = schema_dir / 'changelog-master.xml'
+          if not master.is_file():
+              raise SystemExit('schema/changelog-master.xml não foi encontrado')
+
+          namespace = {'db': 'http://www.liquibase.org/xml/ns/dbchangelog'}
+          root = ET.parse(master).getroot()
+          includes = [node.attrib['file'] for node in root.findall('db:include', namespace)]
+          if not includes:
+              raise SystemExit('changelog-master.xml não possui includes')
+
+          missing = []
+          for include in includes:
+              candidate = (schema_dir / include).resolve()
+              if schema_dir not in candidate.parents or not candidate.is_file() or candidate.stat().st_size == 0:
+                  missing.append(include)
+          if missing:
+              raise SystemExit(f'Migrations ausentes ou inválidas: {", ".join(missing)}')
+
+          print(f'Schema validado: {len(includes)} migrations referenciadas e presentes.')
+          PY
+
       - name: Criar pacote de publicação
         id: package
         shell: bash
@@ -163,6 +194,7 @@ jobs:
           if [[ "$DEPLOY_TYPE" == "completo" ]]; then
             cp target/tracker-server.jar "$PACKAGE_DIR/tracker-server.jar"
             cp -a target/lib "$PACKAGE_DIR/lib"
+            cp -a schema "$PACKAGE_DIR/schema"
           fi
 
           {
