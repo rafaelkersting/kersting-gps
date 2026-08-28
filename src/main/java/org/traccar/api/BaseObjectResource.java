@@ -96,6 +96,10 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
         }
     }
 
+    protected void checkUpdateAccess(T before, T after) throws StorageException {
+        checkAccessPermission(getEditAccessPermission(after));
+    }
+
     @Path("{id}")
     @GET
     public Response getSingle(@PathParam("id") long id) throws StorageException {
@@ -134,10 +138,15 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
         permissionsService.checkPermission(baseClass, getUserId(), entity.getId());
 
         boolean skipReadonly = false;
+        T before = null;
+        boolean updateAccessChecked = false;
         if (entity instanceof User after) {
-            User before = storage.getObject(User.class, new Request(
+            User previous = storage.getObject(User.class, new Request(
                     new Columns.All(), new Condition.Equals("id", entity.getId())));
-            permissionsService.checkUserUpdate(getUserId(), before, after);
+            before = baseClass.cast(previous);
+            checkUpdateAccess(before, entity);
+            updateAccessChecked = true;
+            permissionsService.checkUserUpdate(getUserId(), previous, after);
             skipReadonly = permissionsService.getUser(getUserId())
                     .compare(after, "notificationTokens", "termsAccepted");
         } else if (entity instanceof Group group) {
@@ -154,7 +163,9 @@ public abstract class BaseObjectResource<T extends BaseModel> extends BaseResour
         }
 
         permissionsService.checkEdit(getUserId(), entity, false, skipReadonly);
-        checkAccessPermission(getEditAccessPermission(entity));
+        if (!updateAccessChecked) {
+            checkUpdateAccess(before, entity);
+        }
 
         storage.updateObject(entity, new Request(
                 new Columns.Exclude("id"),

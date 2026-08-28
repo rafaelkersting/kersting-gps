@@ -62,6 +62,7 @@ public class AccessControlService {
                     allowed.add(permission.getPermissionKey());
                 }
             }
+            applyAccountCompatibility(profilePermissions, allowed);
         }
         for (UserPermissionOverride override : storage.getObjects(
                 UserPermissionOverride.class, new Request(
@@ -83,6 +84,23 @@ public class AccessControlService {
                 profile != null ? profile.getName() : null,
                 Set.copyOf(allowed), Set.copyOf(profilePermissions),
                 Set.copyOf(allowedOverrides), Set.copyOf(denied), false);
+    }
+
+    private void applyAccountCompatibility(Set<String> profilePermissions, Set<String> allowed) {
+        boolean hasGranularAccountPermission = profilePermissions.stream()
+                .anyMatch(permission -> permission.startsWith("account."));
+        if (!hasGranularAccountPermission) {
+            if (profilePermissions.contains(AccessPermissions.PREFERENCE_VIEW)) {
+                allowed.add(AccessPermissions.ACCOUNT_VIEW);
+            }
+            if (profilePermissions.contains(AccessPermissions.PREFERENCE_EDIT)) {
+                allowed.addAll(Set.of(
+                        AccessPermissions.ACCOUNT_BASIC_EDIT,
+                        AccessPermissions.ACCOUNT_PASSWORD_CHANGE,
+                        AccessPermissions.ACCOUNT_SECURITY_EDIT,
+                        AccessPermissions.ACCOUNT_PREFERENCES_EDIT));
+            }
+        }
     }
 
     public boolean hasPermission(long userId, String permission) throws StorageException {
