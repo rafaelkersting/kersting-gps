@@ -127,6 +127,7 @@ public class AccessResource extends BaseResource {
     @Path("users/{id}")
     @GET
     public UserAccess getUserAccess(@PathParam("id") long userId) throws StorageException {
+        accessControlService.checkPermission(getUserId(), AccessPermissions.USER_ACCESS_CONTROL_EDIT);
         permissionsService.checkAdmin(getUserId());
         accessControlService.checkPermission(getUserId(), AccessPermissions.USER_VIEW);
         UserAccessProfile assignment = storage.getObject(UserAccessProfile.class, new Request(
@@ -158,9 +159,10 @@ public class AccessResource extends BaseResource {
     @PUT
     public UserAccess updateUserAccess(
             @PathParam("id") long userId, UserAccess access) throws StorageException {
-        permissionsService.checkAdmin(getUserId());
+        accessControlService.checkPermission(getUserId(), AccessPermissions.USER_ACCESS_CONTROL_EDIT);
         accessControlService.checkPermission(getUserId(), AccessPermissions.USER_ASSIGN_PROFILE);
         accessControlService.checkPermission(getUserId(), AccessPermissions.ACCESS_PROFILE_ASSIGN);
+        permissionsService.checkAdmin(getUserId());
         User user = storage.getObject(User.class, new Request(
                 new Columns.Include("id"), new Condition.Equals("id", userId)));
         if (user == null) {

@@ -92,6 +92,13 @@ public class ResourceAccessPermissionsTest {
                 AccessPermissions.ATTRIBUTE_EDIT, AccessPermissions.ATTRIBUTE_DELETE);
     }
 
+    @Test
+    public void testUserResourceDistinguishesOwnAccountFromOtherUser() {
+        TestUserResource resource = new TestUserResource();
+        assertEquals(AccessPermissions.ACCOUNT_VIEW, resource.view(10));
+        assertEquals(AccessPermissions.USER_VIEW, resource.view(11));
+    }
+
     private void assertCrud(
             TestResource resource, String view, String create, String edit, String delete) {
         assertEquals(view, resource.view());
@@ -204,5 +211,17 @@ public class ResourceAccessPermissionsTest {
         public String create() { return getCreateAccessPermission(); }
         public String edit() { return getEditAccessPermission(); }
         public String delete() { return getDeleteAccessPermission(); }
+    }
+
+    private static class TestUserResource extends UserResource {
+
+        @Override
+        protected long getUserId() {
+            return 10;
+        }
+
+        public String view(long id) {
+            return getViewAccessPermission(id);
+        }
     }
 }

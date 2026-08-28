@@ -114,6 +114,27 @@ public class AccessControlServiceTest {
     }
 
     @Test
+    public void testLegacyPreferenceProfileGetsSafeAccountCompatibility() throws Exception {
+        Storage storage = profileStorage();
+        AccessProfilePermission view = new AccessProfilePermission();
+        view.setPermissionKey(AccessPermissions.PREFERENCE_VIEW);
+        AccessProfilePermission edit = new AccessProfilePermission();
+        edit.setPermissionKey(AccessPermissions.PREFERENCE_EDIT);
+        when(storage.getObjects(eq(AccessProfilePermission.class), any())).thenReturn(List.of(view, edit));
+        when(storage.getObjects(eq(UserPermissionOverride.class), any())).thenReturn(List.of());
+
+        AccessControlService service = createService(storage, false);
+
+        assertTrue(service.hasPermission(USER_ID, AccessPermissions.ACCOUNT_VIEW));
+        assertTrue(service.hasPermission(USER_ID, AccessPermissions.ACCOUNT_BASIC_EDIT));
+        assertTrue(service.hasPermission(USER_ID, AccessPermissions.ACCOUNT_PASSWORD_CHANGE));
+        assertTrue(service.hasPermission(USER_ID, AccessPermissions.ACCOUNT_PREFERENCES_EDIT));
+        assertFalse(service.hasPermission(USER_ID, AccessPermissions.ACCOUNT_EMAIL_EDIT));
+        assertFalse(service.hasPermission(USER_ID, AccessPermissions.ACCOUNT_LOCATION_EDIT));
+        assertFalse(service.hasPermission(USER_ID, AccessPermissions.ACCOUNT_ATTRIBUTES_EDIT));
+    }
+
+    @Test
     public void testAdministratorReceivesCompleteCatalog() throws Exception {
         Storage storage = mock(Storage.class);
         AccessControlService service = createService(storage, true);

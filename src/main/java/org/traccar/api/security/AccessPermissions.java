@@ -74,6 +74,18 @@ public final class AccessPermissions {
     public static final String USER_DELETE = "user.delete";
     public static final String USER_ASSIGN_PROFILE = "user.assign-profile";
     public static final String USER_LINK_SCOPE = "user.link-scope";
+    public static final String USER_ACCESS_CONTROL_EDIT = "user.access-control.edit";
+    public static final String USER_NATIVE_RESTRICTIONS_EDIT = "user.native-restrictions.edit";
+    public static final String USER_ATTRIBUTES_EDIT = "user.attributes.edit";
+
+    public static final String ACCOUNT_VIEW = "account.view";
+    public static final String ACCOUNT_BASIC_EDIT = "account.basic.edit";
+    public static final String ACCOUNT_EMAIL_EDIT = "account.email.edit";
+    public static final String ACCOUNT_PASSWORD_CHANGE = "account.password.change";
+    public static final String ACCOUNT_SECURITY_EDIT = "account.security.edit";
+    public static final String ACCOUNT_PREFERENCES_EDIT = "account.preferences.edit";
+    public static final String ACCOUNT_LOCATION_EDIT = "account.location.edit";
+    public static final String ACCOUNT_ATTRIBUTES_EDIT = "account.attributes.edit";
 
     public static final String ACCESS_PROFILE_VIEW = "access-profile.view";
     public static final String ACCESS_PROFILE_CREATE = "access-profile.create";
@@ -119,7 +131,12 @@ public final class AccessPermissions {
             new Module("notifications", Set.of(
                     NOTIFICATION_VIEW, NOTIFICATION_CREATE, NOTIFICATION_EDIT, NOTIFICATION_DELETE)),
             new Module("users", Set.of(
-                    USER_VIEW, USER_CREATE, USER_EDIT, USER_DELETE, USER_ASSIGN_PROFILE, USER_LINK_SCOPE)),
+                    USER_VIEW, USER_CREATE, USER_EDIT, USER_DELETE, USER_ASSIGN_PROFILE, USER_LINK_SCOPE,
+                    USER_ACCESS_CONTROL_EDIT, USER_NATIVE_RESTRICTIONS_EDIT, USER_ATTRIBUTES_EDIT)),
+            new Module("account", Set.of(
+                    ACCOUNT_VIEW, ACCOUNT_BASIC_EDIT, ACCOUNT_EMAIL_EDIT, ACCOUNT_PASSWORD_CHANGE,
+                    ACCOUNT_SECURITY_EDIT, ACCOUNT_PREFERENCES_EDIT, ACCOUNT_LOCATION_EDIT,
+                    ACCOUNT_ATTRIBUTES_EDIT)),
             new Module("access-profiles", Set.of(
                     ACCESS_PROFILE_VIEW, ACCESS_PROFILE_CREATE, ACCESS_PROFILE_EDIT,
                     ACCESS_PROFILE_DISABLE, ACCESS_PROFILE_ASSIGN)),

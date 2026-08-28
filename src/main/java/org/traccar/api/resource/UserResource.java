@@ -22,6 +22,7 @@ import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.core.Context;
 import org.traccar.api.BaseObjectResource;
 import org.traccar.api.security.AccessPermissions;
+import org.traccar.api.security.UserUpdateAccessService;
 import org.traccar.command.SystemCommandService;
 import org.traccar.config.Config;
 import org.traccar.config.Keys;
@@ -68,6 +69,9 @@ public class UserResource extends BaseObjectResource<User> {
     @Inject
     private SystemCommandService systemCommandService;
 
+    @Inject
+    private UserUpdateAccessService userUpdateAccessService;
+
     @Context
     private HttpServletRequest request;
 
@@ -77,12 +81,12 @@ public class UserResource extends BaseObjectResource<User> {
 
     @Override
     protected String getViewAccessPermission(long id) {
-        return id == getUserId() ? AccessPermissions.PREFERENCE_VIEW : AccessPermissions.USER_VIEW;
+        return id == getUserId() ? AccessPermissions.ACCOUNT_VIEW : AccessPermissions.USER_VIEW;
     }
 
     @Override
-    protected String getEditAccessPermission(User entity) {
-        return entity.getId() == getUserId() ? AccessPermissions.PREFERENCE_EDIT : AccessPermissions.USER_EDIT;
+    protected void checkUpdateAccess(User before, User after) throws StorageException {
+        userUpdateAccessService.checkUpdate(getUserId(), before, after);
     }
 
     @Override
@@ -186,6 +190,9 @@ public class UserResource extends BaseObjectResource<User> {
     public String generateTotpKey() throws StorageException {
         if (!permissionsService.getServer().getBoolean(Keys.WEB_TOTP_ENABLE.getKey())) {
             throw new SecurityException("One-time password is disabled");
+        }
+        if (getUserId() > 0) {
+            accessControlService.checkPermission(getUserId(), AccessPermissions.ACCOUNT_SECURITY_EDIT);
         }
         return new GoogleAuthenticator().createCredentials().getKey();
     }
