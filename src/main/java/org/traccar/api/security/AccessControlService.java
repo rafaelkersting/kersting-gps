@@ -20,8 +20,8 @@ public class AccessControlService {
 
     public record EffectiveAccess(
             long profileId, String profileName, Set<String> permissions,
-            Set<String> profilePermissions, Set<String> allowedOverrides,
-            Set<String> denied, boolean legacy) {
+            Set<String> profilePermissions, Set<String> compatibilityPermissions,
+            Set<String> allowedOverrides, Set<String> denied, boolean legacy) {
     }
 
     private final Storage storage;
@@ -40,17 +40,18 @@ public class AccessControlService {
         if (user.getAdministrator()) {
             return new EffectiveAccess(
                     0, "Administrador", AccessPermissions.ALL,
-                    AccessPermissions.ALL, Set.of(), Set.of(), false);
+                    AccessPermissions.ALL, Set.of(), Set.of(), Set.of(), false);
         }
         UserAccessProfile assignment = storage.getObject(UserAccessProfile.class, new Request(
                 new Columns.All(), new Condition.Equals("userId", userId)));
         if (assignment == null) {
-            return new EffectiveAccess(0, null, Set.of(), Set.of(), Set.of(), Set.of(), true);
+            return new EffectiveAccess(0, null, Set.of(), Set.of(), Set.of(), Set.of(), Set.of(), true);
         }
         AccessProfile profile = storage.getObject(AccessProfile.class, new Request(
                 new Columns.All(), new Condition.Equals("id", assignment.getProfileId())));
         Set<String> profilePermissions = new HashSet<>();
         Set<String> allowed = new HashSet<>();
+        Set<String> compatibilityPermissions = new HashSet<>();
         Set<String> allowedOverrides = new HashSet<>();
         Set<String> denied = new HashSet<>();
         if (profile != null && !profile.getDisabled()) {
@@ -62,7 +63,7 @@ public class AccessControlService {
                     allowed.add(permission.getPermissionKey());
                 }
             }
-            applyAccountCompatibility(profilePermissions, allowed);
+            compatibilityPermissions.addAll(applyAccountCompatibility(profilePermissions, allowed));
         }
         for (UserPermissionOverride override : storage.getObjects(
                 UserPermissionOverride.class, new Request(
@@ -83,24 +84,28 @@ public class AccessControlService {
                 profile != null ? profile.getId() : 0,
                 profile != null ? profile.getName() : null,
                 Set.copyOf(allowed), Set.copyOf(profilePermissions),
-                Set.copyOf(allowedOverrides), Set.copyOf(denied), false);
+                Set.copyOf(compatibilityPermissions), Set.copyOf(allowedOverrides),
+                Set.copyOf(denied), false);
     }
 
-    private void applyAccountCompatibility(Set<String> profilePermissions, Set<String> allowed) {
+    private Set<String> applyAccountCompatibility(Set<String> profilePermissions, Set<String> allowed) {
+        Set<String> compatibilityPermissions = new HashSet<>();
         boolean hasGranularAccountPermission = profilePermissions.stream()
                 .anyMatch(permission -> permission.startsWith("account."));
         if (!hasGranularAccountPermission) {
             if (profilePermissions.contains(AccessPermissions.PREFERENCE_VIEW)) {
-                allowed.add(AccessPermissions.ACCOUNT_VIEW);
+                compatibilityPermissions.add(AccessPermissions.ACCOUNT_VIEW);
             }
             if (profilePermissions.contains(AccessPermissions.PREFERENCE_EDIT)) {
-                allowed.addAll(Set.of(
+                compatibilityPermissions.addAll(Set.of(
                         AccessPermissions.ACCOUNT_BASIC_EDIT,
                         AccessPermissions.ACCOUNT_PASSWORD_CHANGE,
                         AccessPermissions.ACCOUNT_SECURITY_EDIT,
                         AccessPermissions.ACCOUNT_PREFERENCES_EDIT));
             }
         }
+        allowed.addAll(compatibilityPermissions);
+        return compatibilityPermissions;
     }
 
     public boolean hasPermission(long userId, String permission) throws StorageException {
