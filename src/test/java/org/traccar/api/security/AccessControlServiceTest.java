@@ -125,6 +125,12 @@ public class AccessControlServiceTest {
 
         AccessControlService service = createService(storage, false);
 
+        AccessControlService.EffectiveAccess access = service.getEffectiveAccess(USER_ID);
+        assertTrue(access.compatibilityPermissions().contains(AccessPermissions.ACCOUNT_VIEW));
+        assertTrue(access.compatibilityPermissions().contains(AccessPermissions.ACCOUNT_BASIC_EDIT));
+        assertTrue(access.compatibilityPermissions().contains(AccessPermissions.ACCOUNT_PASSWORD_CHANGE));
+        assertTrue(access.compatibilityPermissions().contains(AccessPermissions.ACCOUNT_SECURITY_EDIT));
+        assertTrue(access.compatibilityPermissions().contains(AccessPermissions.ACCOUNT_PREFERENCES_EDIT));
         assertTrue(service.hasPermission(USER_ID, AccessPermissions.ACCOUNT_VIEW));
         assertTrue(service.hasPermission(USER_ID, AccessPermissions.ACCOUNT_BASIC_EDIT));
         assertTrue(service.hasPermission(USER_ID, AccessPermissions.ACCOUNT_PASSWORD_CHANGE));
@@ -132,6 +138,49 @@ public class AccessControlServiceTest {
         assertFalse(service.hasPermission(USER_ID, AccessPermissions.ACCOUNT_EMAIL_EDIT));
         assertFalse(service.hasPermission(USER_ID, AccessPermissions.ACCOUNT_LOCATION_EDIT));
         assertFalse(service.hasPermission(USER_ID, AccessPermissions.ACCOUNT_ATTRIBUTES_EDIT));
+    }
+
+    @Test
+    public void testExplicitGranularAccountPermissionKeepsProfileOrigin() throws Exception {
+        Storage storage = profileStorage();
+        AccessProfilePermission preferenceEdit = new AccessProfilePermission();
+        preferenceEdit.setPermissionKey(AccessPermissions.PREFERENCE_EDIT);
+        AccessProfilePermission accountBasicEdit = new AccessProfilePermission();
+        accountBasicEdit.setPermissionKey(AccessPermissions.ACCOUNT_BASIC_EDIT);
+        when(storage.getObjects(eq(AccessProfilePermission.class), any()))
+                .thenReturn(List.of(preferenceEdit, accountBasicEdit));
+        when(storage.getObjects(eq(UserPermissionOverride.class), any())).thenReturn(List.of());
+
+        AccessControlService.EffectiveAccess access = createService(storage, false).getEffectiveAccess(USER_ID);
+
+        assertTrue(access.profilePermissions().contains(AccessPermissions.ACCOUNT_BASIC_EDIT));
+        assertTrue(access.compatibilityPermissions().isEmpty());
+        assertFalse(access.permissions().contains(AccessPermissions.ACCOUNT_PASSWORD_CHANGE));
+    }
+
+    @Test
+    public void testAccountCompatibilityKeepsOverridePrecedence() throws Exception {
+        Storage storage = profileStorage();
+        AccessProfilePermission preferenceEdit = new AccessProfilePermission();
+        preferenceEdit.setPermissionKey(AccessPermissions.PREFERENCE_EDIT);
+        UserPermissionOverride allow = new UserPermissionOverride();
+        allow.setPermissionKey(AccessPermissions.ACCOUNT_EMAIL_EDIT);
+        allow.setEffect(UserPermissionOverride.EFFECT_ALLOW);
+        UserPermissionOverride deny = new UserPermissionOverride();
+        deny.setPermissionKey(AccessPermissions.ACCOUNT_BASIC_EDIT);
+        deny.setEffect(UserPermissionOverride.EFFECT_DENY);
+        when(storage.getObjects(eq(AccessProfilePermission.class), any())).thenReturn(List.of(preferenceEdit));
+        when(storage.getObjects(eq(UserPermissionOverride.class), any())).thenReturn(List.of(allow, deny));
+
+        AccessControlService service = createService(storage, false);
+        AccessControlService.EffectiveAccess access = service.getEffectiveAccess(USER_ID);
+
+        assertTrue(access.allowedOverrides().contains(AccessPermissions.ACCOUNT_EMAIL_EDIT));
+        assertTrue(access.denied().contains(AccessPermissions.ACCOUNT_BASIC_EDIT));
+        assertTrue(access.compatibilityPermissions().contains(AccessPermissions.ACCOUNT_BASIC_EDIT));
+        assertFalse(service.hasPermission(USER_ID, AccessPermissions.ACCOUNT_BASIC_EDIT));
+        assertThrows(ForbiddenException.class,
+                () -> service.checkPermission(USER_ID, AccessPermissions.ACCOUNT_BASIC_EDIT));
     }
 
     @Test

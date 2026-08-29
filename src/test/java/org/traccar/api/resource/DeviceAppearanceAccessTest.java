@@ -75,7 +75,7 @@ public class DeviceAppearanceAccessTest {
         return new AccessControlService.EffectiveAccess(
                 1, "Cliente", Set.of(AccessPermissions.APPEARANCE_VIEW, AccessPermissions.CARD_IMAGE),
                 Set.of(AccessPermissions.APPEARANCE_VIEW, AccessPermissions.CARD_IMAGE),
-                Set.of(), Set.of(), false);
+                Set.of(), Set.of(), Set.of(), false);
     }
 
     private void invokeAppearanceWrite(TestDeviceResource resource, String permission) throws Exception {
