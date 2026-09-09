@@ -1,0 +1,15 @@
+{
+  "id": "geofence",
+  "name": "Travessia de cerca virtual",
+  "points": [
+    {"latitude":-28.29130,"longitude":-53.50230,"altitude":416,"course":90,"speedKph":0,"ignition":true,"motion":false,"stage":"Fora da cerca"},
+    {"latitude":-28.29128,"longitude":-53.50160,"altitude":416,"course":89,"speedKph":28,"ignition":true,"motion":true},
+    {"latitude":-28.29124,"longitude":-53.50090,"altitude":417,"course":88,"speedKph":34,"ignition":true,"motion":true,"stage":"Entrada na geocerca"},
+    {"latitude":-28.29120,"longitude":-53.50020,"altitude":417,"course":87,"speedKph":40,"ignition":true,"motion":true},
+    {"latitude":-28.29116,"longitude":-53.49960,"altitude":418,"course":86,"speedKph":0,"ignition":true,"motion":false,"stage":"Permanência na geocerca"},
+    {"latitude":-28.29112,"longitude":-53.49900,"altitude":418,"course":86,"speedKph":82,"ignition":true,"motion":true,"stage":"Excesso de velocidade"},
+    {"latitude":-28.29108,"longitude":-53.49830,"altitude":419,"course":87,"speedKph":48,"ignition":true,"motion":true,"stage":"Saída da geocerca"},
+    {"latitude":-28.29104,"longitude":-53.49750,"altitude":419,"course":88,"speedKph":30,"ignition":true,"motion":true},
+    {"latitude":-28.29100,"longitude":-53.49680,"altitude":420,"course":89,"speedKph":0,"ignition":false,"motion":false,"stage":"Percurso concluído"}
+  ]
+}

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE properties SYSTEM 'http://java.sun.com/dtd/properties.dtd'>
+<properties>
+
+    <!-- Disposable local homologation profile. Never use this database in production. -->
+    <entry key='config.useEnvironmentVariables'>false</entry>
+    <entry key='web.path'>./traccar-web/build</entry>
+    <entry key='web.localizationPath'>./traccar-web/src/resources/l10n</entry>
+    <entry key='web.address'>127.0.0.1</entry>
+    <entry key='web.port'>8082</entry>
+
+    <entry key='logger.console'>true</entry>
+    <entry key='logger.queries'>false</entry>
+    <entry key='logger.fullStackTraces'>true</entry>
+    <entry key='media.path'>./target/demo-media</entry>
+
+    <entry key='database.driver'>org.h2.Driver</entry>
+    <entry key='database.url'>jdbc:h2:./target/demo-database</entry>
+    <entry key='database.user'>sa</entry>
+    <entry key='database.password' />
+
+    <entry key='protocols.enable'>osmand</entry>
+    <entry key='geocoder.enable'>false</entry>
+
+    <entry key='demo.enabled'>true</entry>
+    <entry key='demo.sessionDurationMinutes'>2</entry>
+    <entry key='demo.maxConcurrentSessions'>20</entry>
+    <entry key='demo.maxSessionsPerIp'>100</entry>
+    <entry key='demo.maxSessionsPerEmail'>100</entry>
+    <entry key='demo.cleanupInterval'>10</entry>
+    <entry key='demo.defaultScenario'>urban</entry>
+    <entry key='demo.simulatorUrl'>http://127.0.0.1:5055/</entry>
+    <entry key='demo.simulatorIntervalMillis'>250</entry>
+    <entry key='demo.offlineDurationSeconds'>3</entry>
+    <entry key='demo.completeDurationSeconds'>30</entry>
+</properties>

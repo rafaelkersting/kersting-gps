@@ -31,7 +31,13 @@ public class ResourceErrorHandler implements ExceptionMapper<Exception> {
         exception.printStackTrace(printWriter);
 
         if (exception instanceof WebApplicationException webException) {
+            if (webException.getResponse().getStatus() == Response.Status.FORBIDDEN.getStatusCode()
+                    || webException.getResponse().getStatus() == Response.Status.UNAUTHORIZED.getStatusCode()) {
+                return Response.fromResponse(webException.getResponse()).entity(null).build();
+            }
             return Response.fromResponse(webException.getResponse()).entity(stringWriter.toString()).build();
+        } else if (exception instanceof SecurityException) {
+            return Response.status(Response.Status.FORBIDDEN).build();
         } else {
             return Response.status(Response.Status.BAD_REQUEST).entity(stringWriter.toString()).build();
         }

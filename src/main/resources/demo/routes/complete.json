@@ -1,0 +1,22 @@
+{
+  "id": "complete",
+  "name": "Demonstração completa Kersting GPS",
+  "points": [
+    {"latitude":-28.29200,"longitude":-53.50300,"altitude":415,"course":88,"speedKph":0,"ignition":false,"motion":false,"stage":"Dispositivo online"},
+    {"latitude":-28.29195,"longitude":-53.50260,"altitude":415,"course":88,"speedKph":0,"ignition":true,"motion":false,"stage":"Ignição ligada"},
+    {"latitude":-28.29180,"longitude":-53.50190,"altitude":416,"course":82,"speedKph":24,"ignition":true,"motion":true,"stage":"Veículo em movimento"},
+    {"latitude":-28.29155,"longitude":-53.50110,"altitude":417,"course":76,"speedKph":36,"ignition":true,"motion":true,"stage":"Entrada na geocerca"},
+    {"latitude":-28.29125,"longitude":-53.50030,"altitude":418,"course":70,"speedKph":42,"ignition":true,"motion":true},
+    {"latitude":-28.29095,"longitude":-53.49960,"altitude":419,"course":64,"speedKph":0,"ignition":true,"motion":false,"stage":"Parada na geocerca"},
+    {"latitude":-28.29070,"longitude":-53.49895,"altitude":420,"course":60,"speedKph":82,"ignition":true,"motion":true,"stage":"Excesso de velocidade"},
+    {"latitude":-28.29045,"longitude":-53.49825,"altitude":421,"course":66,"speedKph":54,"ignition":true,"motion":true,"stage":"Saída da geocerca"},
+    {"latitude":-28.29020,"longitude":-53.49750,"altitude":422,"course":72,"speedKph":44,"ignition":true,"motion":true},
+    {"latitude":-28.28990,"longitude":-53.49670,"altitude":423,"course":78,"speedKph":32,"ignition":true,"motion":true},
+    {"latitude":-28.28970,"longitude":-53.49620,"altitude":423,"course":82,"speedKph":0,"ignition":true,"motion":false,"stage":"Parada"},
+    {"latitude":-28.28970,"longitude":-53.49620,"altitude":423,"course":82,"speedKph":0,"ignition":false,"motion":false,"stage":"Ignição desligada"},
+    {"latitude":-28.28970,"longitude":-53.49620,"altitude":423,"course":82,"speedKph":0,"ignition":false,"motion":false,"stage":"Dispositivo offline","action":"offline"},
+    {"latitude":-28.28965,"longitude":-53.49590,"altitude":423,"course":84,"speedKph":18,"ignition":true,"motion":true,"stage":"Dispositivo online"},
+    {"latitude":-28.28955,"longitude":-53.49530,"altitude":424,"course":86,"speedKph":24,"ignition":true,"motion":true},
+    {"latitude":-28.28950,"longitude":-53.49490,"altitude":424,"course":88,"speedKph":0,"ignition":false,"motion":false,"stage":"Demonstração concluída"}
+  ]
+}

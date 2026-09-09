@@ -249,8 +249,8 @@ public class MemoryStorage extends Storage {
 
     @Override
     public void removeObject(Class<?> clazz, Request request) {
-        long id = (Long) ((Condition.Equals) request.getCondition()).getValue();
-        objects.computeIfAbsent(clazz, key -> new ConcurrentHashMap<>()).remove(id);
+        objects.computeIfAbsent(clazz, key -> new ConcurrentHashMap<>()).entrySet()
+                .removeIf(entry -> checkCondition(request.getCondition(), entry.getValue()));
     }
 
     private Set<Pair<Long, Long>> getPermissionsSet(Class<?> ownerClass, Class<?> propertyClass) {

@@ -1,0 +1,18 @@
+{
+  "id": "urban",
+  "name": "Percurso urbano em Panambi",
+  "points": [
+    {"latitude":-28.29262,"longitude":-53.50186,"altitude":415,"course":90,"speedKph":0,"ignition":true,"motion":false,"stage":"Ignição ligada"},
+    {"latitude":-28.29258,"longitude":-53.50097,"altitude":416,"course":88,"speedKph":24,"ignition":true,"motion":true,"stage":"Veículo em movimento"},
+    {"latitude":-28.29246,"longitude":-53.49963,"altitude":418,"course":84,"speedKph":38,"ignition":true,"motion":true},
+    {"latitude":-28.29217,"longitude":-53.49835,"altitude":421,"course":70,"speedKph":39,"ignition":true,"motion":true},
+    {"latitude":-28.29142,"longitude":-53.49750,"altitude":424,"course":25,"speedKph":27,"ignition":true,"motion":true,"stage":"Curvas urbanas"},
+    {"latitude":-28.29043,"longitude":-53.49769,"altitude":424,"course":334,"speedKph":32,"ignition":true,"motion":true},
+    {"latitude":-28.28992,"longitude":-53.49880,"altitude":421,"course":285,"speedKph":0,"ignition":true,"motion":false,"stage":"Parada"},
+    {"latitude":-28.28993,"longitude":-53.49970,"altitude":419,"course":266,"speedKph":28,"ignition":true,"motion":true,"stage":"Retomada"},
+    {"latitude":-28.29032,"longitude":-53.50094,"altitude":416,"course":238,"speedKph":34,"ignition":true,"motion":true},
+    {"latitude":-28.29118,"longitude":-53.50162,"altitude":414,"course":198,"speedKph":30,"ignition":true,"motion":true},
+    {"latitude":-28.29222,"longitude":-53.50178,"altitude":415,"course":190,"speedKph":20,"ignition":true,"motion":true},
+    {"latitude":-28.29262,"longitude":-53.50186,"altitude":415,"course":198,"speedKph":0,"ignition":false,"motion":false,"stage":"Ignição desligada"}
+  ]
+}
