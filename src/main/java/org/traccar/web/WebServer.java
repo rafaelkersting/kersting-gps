@@ -45,8 +45,8 @@ import org.slf4j.LoggerFactory;
 import org.traccar.BaseProtocol;
 import org.traccar.LifecycleObject;
 import org.traccar.api.CorsResponseFilter;
-import org.traccar.protocol.OsmAndProtocol;
 import org.traccar.api.DateParameterConverterProvider;
+import org.traccar.api.DemoExceptionMapper;
 import org.traccar.api.MediaFilter;
 import org.traccar.api.ResourceErrorHandler;
 import org.traccar.api.StreamWriter;
@@ -56,6 +56,7 @@ import org.traccar.api.security.SecurityRequestFilter;
 import org.traccar.config.Config;
 import org.traccar.config.Keys;
 import org.traccar.helper.ObjectMapperContextResolver;
+import org.traccar.protocol.OsmAndProtocol;
 
 import javax.sql.DataSource;
 import java.io.IOException;
@@ -194,6 +195,7 @@ public class WebServer implements LifecycleObject {
                 DateParameterConverterProvider.class,
                 SecurityRequestFilter.class,
                 CorsResponseFilter.class,
+                DemoExceptionMapper.class,
                 ResourceErrorHandler.class,
                 StreamWriter.class);
         resourceConfig.packages(ServerResource.class.getPackage().getName());
