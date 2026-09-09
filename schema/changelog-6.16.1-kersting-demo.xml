@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+  xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd"
+  logicalFilePath="changelog-6.16.1-kersting-demo">
+
+  <changeSet author="kersting" id="kersting-demo-sessions">
+    <createTable tableName="tc_demo_sessions">
+      <column name="id" type="BIGINT" autoIncrement="true"><constraints primaryKey="true" nullable="false" /></column>
+      <column name="userid" type="BIGINT" />
+      <column name="groupid" type="BIGINT" />
+      <column name="deviceid" type="BIGINT" />
+      <column name="geofenceid" type="BIGINT" />
+      <column name="emailhash" type="VARCHAR(64)"><constraints nullable="false" /></column>
+      <column name="iphash" type="VARCHAR(64)"><constraints nullable="false" /></column>
+      <column name="routeid" type="VARCHAR(32)" />
+      <column name="scenarioid" type="VARCHAR(32)" />
+      <column name="status" type="VARCHAR(32)"><constraints nullable="false" /></column>
+      <column name="currentstep" type="VARCHAR(128)" />
+      <column name="progress" type="INT" defaultValueNumeric="0"><constraints nullable="false" /></column>
+      <column name="createdat" type="TIMESTAMP"><constraints nullable="false" /></column>
+      <column name="startedat" type="TIMESTAMP" />
+      <column name="expiresat" type="TIMESTAMP"><constraints nullable="false" /></column>
+      <column name="finishedat" type="TIMESTAMP" />
+      <column name="lastactivityat" type="TIMESTAMP"><constraints nullable="false" /></column>
+      <column name="cleanupcomplete" type="BOOLEAN" defaultValueBoolean="false"><constraints nullable="false" /></column>
+      <column name="attributes" type="VARCHAR(4000)" />
+    </createTable>
+    <createIndex tableName="tc_demo_sessions" indexName="idx_demo_sessions_email_created">
+      <column name="emailhash" /><column name="createdat" />
+    </createIndex>
+    <createIndex tableName="tc_demo_sessions" indexName="idx_demo_sessions_ip_created">
+      <column name="iphash" /><column name="createdat" />
+    </createIndex>
+    <createIndex tableName="tc_demo_sessions" indexName="idx_demo_sessions_status_expires">
+      <column name="status" /><column name="expiresat" />
+    </createIndex>
+  </changeSet>
+
+  <changeSet author="kersting" id="kersting-demo-configuration">
+    <createTable tableName="tc_demo_configuration">
+      <column name="id" type="BIGINT" autoIncrement="true">
+        <constraints primaryKey="true" nullable="false" />
+      </column>
+      <column name="hashsecret" type="VARCHAR(128)">
+        <constraints nullable="false" unique="true" />
+      </column>
+      <column name="createdat" type="TIMESTAMP">
+        <constraints nullable="false" />
+      </column>
+    </createTable>
+  </changeSet>
+
+  <changeSet author="kersting" id="kersting-demo-access-profile">
+    <insert tableName="tc_access_profiles">
+      <column name="name" value="Demonstração" />
+      <column name="description" value="Acesso temporário e isolado à demonstração interativa" />
+      <column name="disabled" valueBoolean="false" />
+    </insert>
+    <sql>
+      INSERT INTO tc_access_profile_permissions (profileid, permissionkey)
+      SELECT id, permissionkey FROM tc_access_profiles
+      CROSS JOIN (
+        SELECT 'map.view' AS permissionkey UNION ALL
+        SELECT 'map.devices' UNION ALL SELECT 'map.follow' UNION ALL SELECT 'map.history' UNION ALL
+        SELECT 'device.view' UNION ALL SELECT 'report.view' UNION ALL SELECT 'report.generate' UNION ALL
+        SELECT 'geofence.view' UNION ALL SELECT 'notification.view' UNION ALL
+        SELECT 'account.view' UNION ALL SELECT 'account.preferences.edit' UNION ALL
+        SELECT 'preference.view' UNION ALL SELECT 'preference.edit'
+      ) demo_permissions
+      WHERE name = 'Demonstração'
+    </sql>
+  </changeSet>
+</databaseChangeLog>

@@ -94,7 +94,7 @@ public class ServerResource extends BaseResource {
 
     @PermitAll
     @GET
-    public Server get() throws StorageException {
+    public Server get(@QueryParam("public") boolean publicView) throws StorageException {
         Server server = storage.getObject(Server.class, new Request(new Columns.All()));
         server.setEmailEnabled(mailManager.getEmailEnabled());
         server.setTextEnabled(smsManager != null);
@@ -103,6 +103,9 @@ public class ServerResource extends BaseResource {
         server.setOpenIdForce(openIdProvider != null && openIdProvider.getForce());
         User user = permissionsService.getUser(getUserId());
         if (user != null) {
+            if (user.getBoolean("demo") && !publicView) {
+                accessControlService.checkPermission(getUserId(), AccessPermissions.SERVER_VIEW);
+            }
             if (user.getAdministrator()) {
                 server.setStorageSpace(Log.getStorageSpace());
             }

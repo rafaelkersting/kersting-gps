@@ -1,0 +1,17 @@
+{
+  "id": "highway",
+  "name": "Trecho rodoviário demonstrativo",
+  "points": [
+    {"latitude":-28.27820,"longitude":-53.52900,"altitude":430,"course":82,"speedKph":0,"ignition":true,"motion":false,"stage":"Ignição ligada"},
+    {"latitude":-28.27775,"longitude":-53.52660,"altitude":429,"course":80,"speedKph":52,"ignition":true,"motion":true,"stage":"Acesso à rodovia"},
+    {"latitude":-28.27710,"longitude":-53.52390,"altitude":428,"course":78,"speedKph":72,"ignition":true,"motion":true},
+    {"latitude":-28.27625,"longitude":-53.52090,"altitude":427,"course":74,"speedKph":86,"ignition":true,"motion":true,"stage":"Velocidade de cruzeiro"},
+    {"latitude":-28.27515,"longitude":-53.51780,"altitude":426,"course":70,"speedKph":92,"ignition":true,"motion":true},
+    {"latitude":-28.27385,"longitude":-53.51490,"altitude":425,"course":66,"speedKph":94,"ignition":true,"motion":true},
+    {"latitude":-28.27225,"longitude":-53.51230,"altitude":424,"course":61,"speedKph":88,"ignition":true,"motion":true,"stage":"Curva suave"},
+    {"latitude":-28.27045,"longitude":-53.51010,"altitude":423,"course":55,"speedKph":82,"ignition":true,"motion":true},
+    {"latitude":-28.26855,"longitude":-53.50830,"altitude":422,"course":50,"speedKph":76,"ignition":true,"motion":true},
+    {"latitude":-28.26660,"longitude":-53.50680,"altitude":421,"course":46,"speedKph":64,"ignition":true,"motion":true,"stage":"Desaceleração"},
+    {"latitude":-28.26540,"longitude":-53.50590,"altitude":420,"course":44,"speedKph":0,"ignition":false,"motion":false,"stage":"Percurso concluído"}
+  ]
+}

@@ -2175,6 +2175,70 @@ public final class Keys {
             "web.mcp.enable",
             List.of(KeyType.CONFIG));
 
+    /** Enable creation of isolated public demonstration sessions. */
+    public static final ConfigKey<Boolean> DEMO_ENABLED = new BooleanConfigKey(
+            "demo.enabled", List.of(KeyType.CONFIG), true);
+
+    /** Lifetime of a demonstration session in minutes. */
+    public static final ConfigKey<Integer> DEMO_SESSION_DURATION_MINUTES = new IntegerConfigKey(
+            "demo.sessionDurationMinutes", List.of(KeyType.CONFIG), 60);
+
+    /** Maximum active demonstration sessions. */
+    public static final ConfigKey<Integer> DEMO_MAX_CONCURRENT_SESSIONS = new IntegerConfigKey(
+            "demo.maxConcurrentSessions", List.of(KeyType.CONFIG), 20);
+
+    /** Maximum demonstration sessions created by one IP address in 24 hours. */
+    public static final ConfigKey<Integer> DEMO_MAX_SESSIONS_PER_IP = new IntegerConfigKey(
+            "demo.maxSessionsPerIp", List.of(KeyType.CONFIG), 3);
+
+    /** Maximum demonstration sessions created by one email address in 24 hours. */
+    public static final ConfigKey<Integer> DEMO_MAX_SESSIONS_PER_EMAIL = new IntegerConfigKey(
+            "demo.maxSessionsPerEmail", List.of(KeyType.CONFIG), 2);
+
+    /** Cleanup and recovery interval in seconds. */
+    public static final ConfigKey<Integer> DEMO_CLEANUP_INTERVAL = new IntegerConfigKey(
+            "demo.cleanupInterval", List.of(KeyType.CONFIG), 60);
+
+    /** Scenario selected by default in the demonstration center. */
+    public static final ConfigKey<String> DEMO_DEFAULT_SCENARIO = new StringConfigKey(
+            "demo.defaultScenario", List.of(KeyType.CONFIG), "urban");
+
+    /** Optional HMAC secret used to pseudonymize rate-limit identifiers. */
+    public static final ConfigKey<String> DEMO_HASH_SECRET = new StringConfigKey(
+            "demo.hashSecret", List.of(KeyType.CONFIG));
+
+    /** Internal OsmAnd endpoint. This value is never accepted from a browser request. */
+    public static final ConfigKey<String> DEMO_SIMULATOR_URL = new StringConfigKey(
+            "demo.simulatorUrl", List.of(KeyType.CONFIG), "http://127.0.0.1:5055/");
+
+    /** Default delay between virtual positions in milliseconds. */
+    public static final ConfigKey<Integer> DEMO_SIMULATOR_INTERVAL_MILLIS = new IntegerConfigKey(
+            "demo.simulatorIntervalMillis", List.of(KeyType.CONFIG), 3000);
+
+    /** Controlled offline interval in seconds. */
+    public static final ConfigKey<Integer> DEMO_OFFLINE_DURATION_SECONDS = new IntegerConfigKey(
+            "demo.offlineDurationSeconds", List.of(KeyType.CONFIG), 12);
+
+    /** Target duration of the complete scenario in seconds. */
+    public static final ConfigKey<Integer> DEMO_COMPLETE_DURATION_SECONDS = new IntegerConfigKey(
+            "demo.completeDurationSeconds", List.of(KeyType.CONFIG), 540);
+
+    /** Trust the first X-Forwarded-For address. Enable only behind the configured reverse proxy. */
+    public static final ConfigKey<Boolean> DEMO_TRUST_PROXY = new BooleanConfigKey(
+            "demo.trustProxy", List.of(KeyType.CONFIG), false);
+
+    /** Short-window request limit applied before persistent daily limits. */
+    public static final ConfigKey<Integer> DEMO_RATE_LIMIT_MAX_ATTEMPTS = new IntegerConfigKey(
+            "demo.rateLimitMaxAttempts", List.of(KeyType.CONFIG), 8);
+
+    /** Short-window request limit duration in seconds. */
+    public static final ConfigKey<Integer> DEMO_RATE_LIMIT_WINDOW_SECONDS = new IntegerConfigKey(
+            "demo.rateLimitWindowSeconds", List.of(KeyType.CONFIG), 60);
+
+    /** Retention for pseudonymized demonstration audit rows. */
+    public static final ConfigKey<Integer> DEMO_AUDIT_RETENTION_DAYS = new IntegerConfigKey(
+            "demo.auditRetentionDays", List.of(KeyType.CONFIG), 7);
+
     /**
      * Output logging to the standard terminal output instead of a log file.
      */

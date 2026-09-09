@@ -21,7 +21,10 @@ import jakarta.ws.rs.core.Context;
 import org.traccar.api.SimpleObjectResource;
 import org.traccar.api.security.AccessPermissions;
 import org.traccar.helper.LogAction;
+import org.traccar.model.Device;
 import org.traccar.model.Event;
+import org.traccar.model.Geofence;
+import org.traccar.model.Group;
 import org.traccar.model.Position;
 import org.traccar.model.Report;
 import org.traccar.model.UserRestrictions;
@@ -103,6 +106,25 @@ public class ReportResource extends SimpleObjectResource<Report> {
         super(Report.class, "description", List.of("description"));
     }
 
+    private void checkDemoScope(List<Long> deviceIds, List<Long> groupIds) throws StorageException {
+        if (permissionsService.getUser(getUserId()).hasAttribute("demoSessionId")) {
+            for (long deviceId : deviceIds) {
+                permissionsService.checkPermission(Device.class, getUserId(), deviceId);
+            }
+            for (long groupId : groupIds) {
+                permissionsService.checkPermission(Group.class, getUserId(), groupId);
+            }
+        }
+    }
+
+    private void checkDemoGeofenceScope(List<Long> geofenceIds) throws StorageException {
+        if (permissionsService.getUser(getUserId()).hasAttribute("demoSessionId")) {
+            for (long geofenceId : geofenceIds) {
+                permissionsService.checkPermission(Geofence.class, getUserId(), geofenceId);
+            }
+        }
+    }
+
     @Override
     protected String getViewAccessPermission() {
         return AccessPermissions.REPORT_VIEW;
@@ -135,6 +157,7 @@ public class ReportResource extends SimpleObjectResource<Report> {
             @QueryParam("to") Date to) throws StorageException {
         permissionsService.checkRestriction(getUserId(), UserRestrictions::getDisableReports);
         checkAccessPermission(AccessPermissions.REPORT_GENERATE);
+        checkDemoScope(deviceIds, groupIds);
         actionLogger.report(request, getUserId(), false, "combined", from, to, deviceIds, groupIds);
         return combinedReportProvider.getObjects(getUserId(), deviceIds, groupIds, from, to);
     }
@@ -148,6 +171,7 @@ public class ReportResource extends SimpleObjectResource<Report> {
             @QueryParam("to") Date to) throws StorageException {
         permissionsService.checkRestriction(getUserId(), UserRestrictions::getDisableReports);
         checkAccessPermission(AccessPermissions.REPORT_GENERATE);
+        checkDemoScope(deviceIds, groupIds);
         actionLogger.report(request, getUserId(), false, "route", from, to, deviceIds, groupIds);
         return routeReportProvider.getObjects(getUserId(), deviceIds, groupIds, from, to);
     }
@@ -163,6 +187,7 @@ public class ReportResource extends SimpleObjectResource<Report> {
             @QueryParam("mail") boolean mail) throws StorageException {
         permissionsService.checkRestriction(getUserId(), UserRestrictions::getDisableReports);
         checkAccessPermission(AccessPermissions.REPORT_GENERATE);
+        checkDemoScope(deviceIds, groupIds);
         return executeReport(getUserId(), mail, stream -> {
             actionLogger.report(request, getUserId(), false, "route", from, to, deviceIds, groupIds);
             routeReportProvider.getExcel(stream, getUserId(), deviceIds, groupIds, from, to);
@@ -192,6 +217,7 @@ public class ReportResource extends SimpleObjectResource<Report> {
             @QueryParam("to") Date to) throws StorageException {
         permissionsService.checkRestriction(getUserId(), UserRestrictions::getDisableReports);
         checkAccessPermission(AccessPermissions.REPORT_GENERATE);
+        checkDemoScope(deviceIds, groupIds);
         actionLogger.report(request, getUserId(), false, "events", from, to, deviceIds, groupIds);
         return eventsReportProvider.getObjects(getUserId(), deviceIds, groupIds, types, alarms, from, to);
     }
@@ -209,6 +235,7 @@ public class ReportResource extends SimpleObjectResource<Report> {
             @QueryParam("mail") boolean mail) throws StorageException {
         permissionsService.checkRestriction(getUserId(), UserRestrictions::getDisableReports);
         checkAccessPermission(AccessPermissions.REPORT_GENERATE);
+        checkDemoScope(deviceIds, groupIds);
         return executeReport(getUserId(), mail, stream -> {
             actionLogger.report(request, getUserId(), false, "events", from, to, deviceIds, groupIds);
             eventsReportProvider.getExcel(stream, getUserId(), deviceIds, groupIds, types, alarms, from, to);
@@ -239,6 +266,8 @@ public class ReportResource extends SimpleObjectResource<Report> {
             @QueryParam("to") Date to) throws StorageException {
         permissionsService.checkRestriction(getUserId(), UserRestrictions::getDisableReports);
         checkAccessPermission(AccessPermissions.REPORT_GENERATE);
+        checkDemoScope(deviceIds, groupIds);
+        checkDemoGeofenceScope(geofenceIds);
         actionLogger.report(request, getUserId(), false, "geofences", from, to, deviceIds, groupIds);
         return geofenceReportProvider.getObjects(getUserId(), deviceIds, groupIds, geofenceIds, from, to);
     }
@@ -253,6 +282,7 @@ public class ReportResource extends SimpleObjectResource<Report> {
             @QueryParam("daily") boolean daily) throws StorageException {
         permissionsService.checkRestriction(getUserId(), UserRestrictions::getDisableReports);
         checkAccessPermission(AccessPermissions.REPORT_GENERATE);
+        checkDemoScope(deviceIds, groupIds);
         actionLogger.report(request, getUserId(), false, "summary", from, to, deviceIds, groupIds);
         return summaryReportProvider.getObjects(getUserId(), deviceIds, groupIds, from, to, daily);
     }
@@ -269,6 +299,7 @@ public class ReportResource extends SimpleObjectResource<Report> {
             @QueryParam("mail") boolean mail) throws StorageException {
         permissionsService.checkRestriction(getUserId(), UserRestrictions::getDisableReports);
         checkAccessPermission(AccessPermissions.REPORT_GENERATE);
+        checkDemoScope(deviceIds, groupIds);
         return executeReport(getUserId(), mail, stream -> {
             actionLogger.report(request, getUserId(), false, "summary", from, to, deviceIds, groupIds);
             summaryReportProvider.getExcel(stream, getUserId(), deviceIds, groupIds, from, to, daily);
@@ -297,6 +328,7 @@ public class ReportResource extends SimpleObjectResource<Report> {
             @QueryParam("to") Date to) throws StorageException {
         permissionsService.checkRestriction(getUserId(), UserRestrictions::getDisableReports);
         checkAccessPermission(AccessPermissions.REPORT_GENERATE);
+        checkDemoScope(deviceIds, groupIds);
         actionLogger.report(request, getUserId(), false, "trips", from, to, deviceIds, groupIds);
         return tripsReportProvider.getObjects(getUserId(), deviceIds, groupIds, from, to);
     }
@@ -312,6 +344,7 @@ public class ReportResource extends SimpleObjectResource<Report> {
             @QueryParam("mail") boolean mail) throws StorageException {
         permissionsService.checkRestriction(getUserId(), UserRestrictions::getDisableReports);
         checkAccessPermission(AccessPermissions.REPORT_GENERATE);
+        checkDemoScope(deviceIds, groupIds);
         return executeReport(getUserId(), mail, stream -> {
             actionLogger.report(request, getUserId(), false, "trips", from, to, deviceIds, groupIds);
             tripsReportProvider.getExcel(stream, getUserId(), deviceIds, groupIds, from, to);
@@ -339,6 +372,7 @@ public class ReportResource extends SimpleObjectResource<Report> {
             @QueryParam("to") Date to) throws StorageException {
         permissionsService.checkRestriction(getUserId(), UserRestrictions::getDisableReports);
         checkAccessPermission(AccessPermissions.REPORT_GENERATE);
+        checkDemoScope(deviceIds, groupIds);
         actionLogger.report(request, getUserId(), false, "stops", from, to, deviceIds, groupIds);
         return stopsReportProvider.getObjects(getUserId(), deviceIds, groupIds, from, to);
     }
@@ -354,6 +388,7 @@ public class ReportResource extends SimpleObjectResource<Report> {
             @QueryParam("mail") boolean mail) throws StorageException {
         permissionsService.checkRestriction(getUserId(), UserRestrictions::getDisableReports);
         checkAccessPermission(AccessPermissions.REPORT_GENERATE);
+        checkDemoScope(deviceIds, groupIds);
         return executeReport(getUserId(), mail, stream -> {
             actionLogger.report(request, getUserId(), false, "stops", from, to, deviceIds, groupIds);
             stopsReportProvider.getExcel(stream, getUserId(), deviceIds, groupIds, from, to);
