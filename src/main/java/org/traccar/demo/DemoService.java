@@ -66,7 +66,8 @@ public class DemoService {
             AccessPermissions.MAP_HISTORY, AccessPermissions.DEVICE_VIEW, AccessPermissions.REPORT_VIEW,
             AccessPermissions.REPORT_GENERATE, AccessPermissions.GEOFENCE_VIEW,
             AccessPermissions.NOTIFICATION_VIEW, AccessPermissions.ACCOUNT_VIEW,
-            AccessPermissions.ACCOUNT_PREFERENCES_EDIT);
+            AccessPermissions.ACCOUNT_PREFERENCES_EDIT, AccessPermissions.APPEARANCE_VIEW,
+            AccessPermissions.MARKER_3D, AccessPermissions.MARKER_MODEL, AccessPermissions.MARKER_COLOR);
     private static final List<String> NOTIFICATION_TYPES = List.of(
             Event.TYPE_DEVICE_ONLINE, Event.TYPE_DEVICE_OFFLINE, Event.TYPE_IGNITION_ON,
             Event.TYPE_IGNITION_OFF, Event.TYPE_GEOFENCE_ENTER, Event.TYPE_GEOFENCE_EXIT,
@@ -215,6 +216,7 @@ public class DemoService {
         user.setDisableReports(false);
         user.setFixedEmail(true);
         user.setTemporary(true);
+        user.setMap("googleHybrid");
         user.setDeviceLimit(0);
         user.setUserLimit(0);
         user.setExpirationTime(session.getExpiresAt());
@@ -226,6 +228,7 @@ public class DemoService {
         user.set("mapOnSelect", true);
         user.set("mapLiveRoutes", "all");
         user.set("web.liveRouteLength", 250);
+        user.set("activeMapStyles", "googleHybrid,locationIqStreets,locationIqDark,openFreeMap,osm");
         user.setId(storage.addObject(user, new Request(new Columns.Exclude("id"))));
         return user;
     }
@@ -249,6 +252,10 @@ public class DemoService {
         device.setExpirationTime(session.getExpiresAt());
         device.set("demo", true);
         device.set("demoSessionId", session.getId());
+        device.set("mapMarker3d", "car:hatch");
+        device.set("mapMarker3dCategory", "car");
+        device.set("mapMarker3dModel", "hatch");
+        device.set("mapMarker3dColor", "yellow");
         device.setId(storage.addObject(device, new Request(new Columns.Exclude("id"))));
         return device;
     }

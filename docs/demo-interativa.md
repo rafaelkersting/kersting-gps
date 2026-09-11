@@ -18,6 +18,16 @@ Cada criação provisiona usuário temporário, grupo, dispositivo, geocerca, no
 nativos exclusivos. O usuário recebe o perfil RBAC `Demonstração`; chamadas fora do catálogo de
 permissões continuam sendo recusadas pelo controle de acesso comum da API.
 
+Os quatro trajetos são pré-calculados sobre a malha viária do OpenStreetMap por meio do OSRM e ficam
+versionados em `src/main/resources/demo/routes`. A execução não consulta serviços de roteamento. Os
+pontos são limitados a 20–60 metros conforme o tipo de via, preservando curvas e cruzamentos sem
+interpolação direta entre pontos manuais distantes. O gerador auditável está em
+`tools/homologation/Generate-DemoRoadRoutes.ps1`.
+
+Novas sessões usam Google Híbrido como mapa inicial. A escolha fica isolada por sessão Demo no
+navegador, sem sobrescrever o mapa salvo de usuários reais. O veículo nasce com marcador Carro/Hatch
+amarelo e o perfil permite trocar categoria, modelo e cor somente no dispositivo temporário da sessão.
+
 ## Configuração
 
 | Chave | Padrão | Finalidade |

@@ -41,7 +41,8 @@ public class DemoServiceTest {
             AccessPermissions.REPORT_GENERATE, AccessPermissions.GEOFENCE_VIEW,
             AccessPermissions.NOTIFICATION_VIEW, AccessPermissions.ACCOUNT_VIEW,
             AccessPermissions.ACCOUNT_PREFERENCES_EDIT, AccessPermissions.PREFERENCE_VIEW,
-            AccessPermissions.PREFERENCE_EDIT);
+            AccessPermissions.PREFERENCE_EDIT, AccessPermissions.APPEARANCE_VIEW,
+            AccessPermissions.MARKER_3D, AccessPermissions.MARKER_MODEL, AccessPermissions.MARKER_COLOR);
 
     private Config config;
     private MemoryStorage storage;
@@ -90,10 +91,21 @@ public class DemoServiceTest {
         AccessControlService access = new AccessControlService(storage);
         assertTrue(access.hasPermission(first.session().getUserId(), AccessPermissions.MAP_VIEW));
         assertTrue(access.hasPermission(first.session().getUserId(), AccessPermissions.ACCOUNT_PREFERENCES_EDIT));
+        assertTrue(access.hasPermission(first.session().getUserId(), AccessPermissions.APPEARANCE_VIEW));
+        assertTrue(access.hasPermission(first.session().getUserId(), AccessPermissions.MARKER_COLOR));
         assertFalse(access.hasPermission(first.session().getUserId(), AccessPermissions.USER_VIEW));
         assertFalse(access.hasPermission(first.session().getUserId(), AccessPermissions.DEVICE_EDIT));
         assertFalse(access.hasPermission(first.session().getUserId(), AccessPermissions.ACCOUNT_PASSWORD_CHANGE));
         assertFalse(access.hasPermission(first.session().getUserId(), AccessPermissions.REPORT_EXPORT));
+
+        assertEquals("googleHybrid", first.user().getMap());
+        assertTrue(first.user().getString("activeMapStyles").contains("googleHybrid"));
+        Device demoDevice = object(Device.class, first.session().getDeviceId());
+        assertEquals("car", demoDevice.getCategory());
+        assertEquals("car:hatch", demoDevice.getString("mapMarker3d"));
+        assertEquals("car", demoDevice.getString("mapMarker3dCategory"));
+        assertEquals("hatch", demoDevice.getString("mapMarker3dModel"));
+        assertEquals("yellow", demoDevice.getString("mapMarker3dColor"));
     }
 
     @Test

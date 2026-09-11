@@ -39,5 +39,6 @@
   <include file="changelog-6.15.0.xml" relativeToChangelogFile="true" />
   <include file="changelog-6.16.0-kersting-rbac.xml" relativeToChangelogFile="true" />
   <include file="changelog-6.16.1-kersting-demo.xml" relativeToChangelogFile="true" />
+  <include file="changelog-6.16.2-kersting-demo-appearance.xml" relativeToChangelogFile="true" />
 
 </databaseChangeLog>

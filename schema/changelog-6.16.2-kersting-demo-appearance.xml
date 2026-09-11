@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+  xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                      http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.4.xsd"
+  logicalFilePath="changelog-6.16.2-kersting-demo-appearance">
+
+  <changeSet author="kersting" id="kersting-demo-appearance-permissions">
+    <sql>
+      INSERT INTO tc_access_profile_permissions (profileid, permissionkey)
+      SELECT profile.id, demo_permissions.permissionkey
+      FROM tc_access_profiles profile
+      CROSS JOIN (
+        SELECT 'device.appearance.view' AS permissionkey UNION ALL
+        SELECT 'device.appearance.marker3d' UNION ALL
+        SELECT 'device.appearance.marker-model' UNION ALL
+        SELECT 'device.appearance.marker-color'
+      ) demo_permissions
+      WHERE profile.name = 'Demonstração'
+        AND NOT EXISTS (
+          SELECT 1 FROM tc_access_profile_permissions existing
+          WHERE existing.profileid = profile.id
+            AND existing.permissionkey = demo_permissions.permissionkey
+        )
+    </sql>
+  </changeSet>
+</databaseChangeLog>
