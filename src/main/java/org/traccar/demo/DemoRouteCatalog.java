@@ -18,7 +18,9 @@ public class DemoRouteCatalog {
             boolean ignition, boolean motion, String stage, String action) {
     }
 
-    public record Route(String id, String name, List<Point> points) {
+    public record Route(
+            String id, String name, String source, String generatedAt,
+            double maximumSegmentMeters, List<Point> points) {
     }
 
     private static final List<String> ALLOWED_ROUTES = List.of("urban", "highway", "geofence", "complete");
@@ -45,7 +47,8 @@ public class DemoRouteCatalog {
                 throw new IllegalStateException("Demo route not found");
             }
             Route route = objectMapper.readValue(input, Route.class);
-            if (!routeId.equals(route.id()) || route.points() == null || route.points().size() < 2) {
+            if (!routeId.equals(route.id()) || route.points() == null || route.points().size() < 2
+                    || !"OpenStreetMap/OSRM".equals(route.source()) || route.maximumSegmentMeters() <= 0) {
                 throw new IllegalStateException("Invalid demo route");
             }
             for (Point point : route.points()) {

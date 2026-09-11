@@ -26,7 +26,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.LinkedHashMap;
@@ -43,8 +42,6 @@ import java.util.concurrent.TimeUnit;
 public class DemoSimulatorService implements LifecycleObject {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(DemoSimulatorService.class);
-
-    private static final int INTERPOLATION_STEPS = 4;
 
     private final Config config;
     private final Storage storage;
@@ -139,7 +136,7 @@ public class DemoSimulatorService implements LifecycleObject {
         stopInternal(session.getId(), false);
         var route = routeCatalog.get(scenario.getRouteId());
         var context = new RunContext(
-                session.getId(), device.getId(), device.getUniqueId(), scenario, expand(route.points()));
+                session.getId(), device.getId(), device.getUniqueId(), scenario, route.points());
         runs.put(session.getId(), context);
         schedule(context, 0);
         LOGGER.info("Demo metric=demo_started demoSessionId={} scenario={}", session.getId(), scenario.getId());
@@ -328,35 +325,4 @@ public class DemoSimulatorService implements LifecycleObject {
         LOGGER.warn("Demo metric=demo_failed demoSessionId={}", context.sessionId, error);
     }
 
-    private List<DemoRouteCatalog.Point> expand(List<DemoRouteCatalog.Point> controlPoints) {
-        List<DemoRouteCatalog.Point> result = new ArrayList<>();
-        result.add(controlPoints.getFirst());
-        for (int index = 1; index < controlPoints.size(); index++) {
-            DemoRouteCatalog.Point from = controlPoints.get(index - 1);
-            DemoRouteCatalog.Point to = controlPoints.get(index);
-            for (int step = 1; step <= INTERPOLATION_STEPS; step++) {
-                double ratio = step / (double) INTERPOLATION_STEPS;
-                result.add(new DemoRouteCatalog.Point(
-                        interpolate(from.latitude(), to.latitude(), ratio),
-                        interpolate(from.longitude(), to.longitude(), ratio),
-                        interpolate(from.altitude(), to.altitude(), ratio),
-                        interpolateCourse(from.course(), to.course(), ratio),
-                        interpolate(from.speedKph(), to.speedKph(), ratio),
-                        ratio >= 0.5 ? to.ignition() : from.ignition(),
-                        ratio >= 0.5 ? to.motion() : from.motion(),
-                        step == INTERPOLATION_STEPS ? to.stage() : null,
-                        step == INTERPOLATION_STEPS ? to.action() : null));
-            }
-        }
-        return result;
-    }
-
-    private double interpolate(double from, double to, double ratio) {
-        return from + (to - from) * ratio;
-    }
-
-    private double interpolateCourse(double from, double to, double ratio) {
-        double delta = ((to - from + 540) % 360) - 180;
-        return (from + delta * ratio + 360) % 360;
-    }
 }
