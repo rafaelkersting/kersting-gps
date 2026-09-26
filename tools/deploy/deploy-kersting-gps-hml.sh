@@ -316,7 +316,9 @@ release="$(manifest_value release)"
 
 [[ "$main_commit" =~ ^[0-9a-f]{40}$ && "$frontend_commit" =~ ^[0-9a-f]{40}$ ]] || fail "SHAs inválidos."
 [[ "$deploy_type" == "frontend" || "$deploy_type" == "completo" ]] || fail "Tipo inválido."
-[[ "$deploy_ref" == "release/v0.1.0-homologacao" || "$deploy_ref" == "codex/melhorar-associacao-geocercas" ]] || \
+[[ "$deploy_ref" == "release/v0.1.0-homologacao" || \
+  "$deploy_ref" == "codex/melhorar-associacao-geocercas" || \
+  "$deploy_ref" == "codex/geofence-prod-clean" ]] || \
   fail "Ref não autorizada para HML."
 [[ "$workflow" == "Publicar Homologação HML" ]] || fail "Workflow inesperado."
 [[ "$run_id" =~ ^[0-9]+$ && "$run_attempt" =~ ^[0-9]+$ ]] || fail "Identificação do workflow inválida."
