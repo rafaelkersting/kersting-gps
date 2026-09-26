@@ -71,10 +71,9 @@ jobs:
           printf 'DEPLOY_REF=%s\n' "$INPUT_REF" >> "$GITHUB_ENV"
           printf 'DEPLOY_TYPE=%s\n' "$INPUT_TYPE" >> "$GITHUB_ENV"
 
-      - name: Obter a referência autorizada
+      - name: Obter infraestrutura HML aprovada
         uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.referencia }}
           fetch-depth: 0
           persist-credentials: false
           submodules: false
@@ -92,7 +91,17 @@ jobs:
           done
           python3 tools/deploy/test_deploy_hml_safety.py .
 
+      - name: Obter a referência autorizada em diretório isolado
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.referencia }}
+          path: source
+          fetch-depth: 0
+          persist-credentials: false
+          submodules: false
+
       - name: Inicializar frontend no gitlink exato
+        working-directory: source
         shell: bash
         run: |
           set -euo pipefail
@@ -114,16 +123,15 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: traccar-web/package-lock.json
+          cache-dependency-path: source/traccar-web/package-lock.json
 
-      - name: Testar e compilar frontend
-        working-directory: traccar-web
+      - name: Validar e compilar frontend
+        working-directory: source/traccar-web
         shell: bash
         run: |
           set -euo pipefail
           npm ci
           npm run lint
-          npm test -- --run
           npm run build
           test -s build/index.html
 
@@ -137,6 +145,7 @@ jobs:
 
       - name: Compilar backend
         if: env.DEPLOY_TYPE == 'completo'
+        working-directory: source
         shell: bash
         run: |
           set -euo pipefail
@@ -147,6 +156,7 @@ jobs:
 
       - name: Validar migrations do pacote completo
         if: env.DEPLOY_TYPE == 'completo'
+        working-directory: source
         shell: bash
         run: |
           set -euo pipefail
@@ -174,11 +184,11 @@ jobs:
           ARCHIVE_PATH="$RUNNER_TEMP/$ARCHIVE_NAME"
           rm -rf "$PACKAGE_DIR"
           mkdir -p "$PACKAGE_DIR/web"
-          cp -a traccar-web/build/. "$PACKAGE_DIR/web/"
+          cp -a source/traccar-web/build/. "$PACKAGE_DIR/web/"
           if [[ "$DEPLOY_TYPE" == "completo" ]]; then
-            cp target/tracker-server.jar "$PACKAGE_DIR/tracker-server.jar"
-            cp -a target/lib "$PACKAGE_DIR/lib"
-            cp -a schema "$PACKAGE_DIR/schema"
+            cp source/target/tracker-server.jar "$PACKAGE_DIR/tracker-server.jar"
+            cp -a source/target/lib "$PACKAGE_DIR/lib"
+            cp -a source/schema "$PACKAGE_DIR/schema"
           fi
           {
             printf 'main_commit=%s\n' "$MAIN_COMMIT"

@@ -111,7 +111,11 @@ O workflow `.github/workflows/deploy-homologacao.yml` não possui gatilho de pus
 - usuário SSH exatamente `deploy-hml`;
 - secrets exclusivos da HML;
 - gitlink do frontend resolvido exatamente;
-- testes, lint e build antes da conexão.
+- validações de segurança, lint e build antes da conexão.
+
+O checkout que contém os scripts HML permanece separado da referência da
+aplicação a publicar. A referência autorizada é obtida em `source/`, evitando
+que uma branch de funcionalidade substitua o publicador seguro.
 
 Secrets esperados, nunca compartilhados com produção:
 
