@@ -54,6 +54,8 @@ class HmlDeploySafetyTest(unittest.TestCase):
         self.assertNotRegex(self.workflow, r'(?m)^\s+(push|pull_request):')
         self.assertIn('codex/melhorar-associacao-geocercas', self.workflow)
         self.assertIn('codex/geofence-prod-clean', self.workflow)
+        self.assertIn('codex/posicao-gps-antiga', self.workflow)
+        self.assertIn('codex/posicao-gps-antiga', self.publisher)
         self.assertIn('environment: homologacao', self.workflow)
 
     def test_sudoers_has_no_wildcard_or_arguments(self):

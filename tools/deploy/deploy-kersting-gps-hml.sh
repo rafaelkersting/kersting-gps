@@ -318,7 +318,8 @@ release="$(manifest_value release)"
 [[ "$deploy_type" == "frontend" || "$deploy_type" == "completo" ]] || fail "Tipo inválido."
 [[ "$deploy_ref" == "release/v0.1.0-homologacao" || \
   "$deploy_ref" == "codex/melhorar-associacao-geocercas" || \
-  "$deploy_ref" == "codex/geofence-prod-clean" ]] || \
+  "$deploy_ref" == "codex/geofence-prod-clean" || \
+  "$deploy_ref" == "codex/posicao-gps-antiga" ]] || \
   fail "Ref não autorizada para HML."
 [[ "$workflow" == "Publicar Homologação HML" ]] || fail "Workflow inesperado."
 [[ "$run_id" =~ ^[0-9]+$ && "$run_attempt" =~ ^[0-9]+$ ]] || fail "Identificação do workflow inválida."

@@ -33,6 +33,7 @@ env:
     release/v0.1.0-homologacao
     codex/melhorar-associacao-geocercas
     codex/geofence-prod-clean
+    codex/posicao-gps-antiga
   EXPECTED_ENVIRONMENT: homologacao
   EXPECTED_USER: deploy-hml
   EXPECTED_INTERNAL_URL: http://127.0.0.1:18082/
